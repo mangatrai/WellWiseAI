@@ -1,1 +1,13 @@
- 
+# Core dependencies
+python-dotenv
+dlisio
+
+# Progress tracking
+tqdm==4.66.1
+
+# Data processing
+numpy
+pandas
+
+# Logging and utilities
+structlog
