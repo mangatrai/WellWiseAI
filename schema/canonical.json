@@ -1,0 +1,766 @@
+{
+  "schema_version": "1.0",
+  "description": "Canonical schema for WellWiseAI oil and gas data parsing system",
+  "table_name": "petro_data",
+  "keyspace": "default_keyspace",
+  "primary_key": {
+    "partition_key": ["well_id", "record_type"],
+    "clustering_key": ["curve_name", "depth_start"]
+  },
+  "fields": {
+    "well_id": {
+      "type": "text",
+      "description": "Unique well identifier",
+      "required": true,
+      "indexed": false,
+      "validation": {
+        "pattern": "^[A-Za-z0-9_-]+$",
+        "max_length": 100
+      }
+    },
+    "record_type": {
+      "type": "text",
+      "description": "Type of data record (e.g., logging, core, seismic, production)",
+      "required": true,
+      "indexed": false,
+      "validation": {
+        "enum": ["logging", "core", "seismic", "production", "drilling", "completion", "reservoir"]
+      }
+    },
+    "curve_name": {
+      "type": "text",
+      "description": "Name of the measurement curve or parameter",
+      "required": true,
+      "indexed": false,
+      "validation": {
+        "max_length": 200
+      }
+    },
+    "depth_start": {
+      "type": "double",
+      "description": "Starting depth of the measurement interval",
+      "required": true,
+      "indexed": false,
+      "validation": {
+        "min": 0.0,
+        "max": 50000.0
+      }
+    },
+    "acquisition_date": {
+      "type": "timestamp",
+      "description": "Date and time of data acquisition",
+      "required": false,
+      "indexed": false
+    },
+    "analyst": {
+      "type": "text",
+      "description": "Name of the data analyst",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "max_length": 100
+      }
+    },
+    "archie_a": {
+      "type": "double",
+      "description": "Archie equation parameter 'a'",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "min": 0.0,
+        "max": 10.0
+      }
+    },
+    "archie_m": {
+      "type": "double",
+      "description": "Archie equation parameter 'm'",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "min": 1.0,
+        "max": 5.0
+      }
+    },
+    "archie_n": {
+      "type": "double",
+      "description": "Archie equation parameter 'n'",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "min": 1.0,
+        "max": 5.0
+      }
+    },
+    "bulk_vol_water": {
+      "type": "double",
+      "description": "Bulk volume of water",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "min": 0.0,
+        "max": 1.0
+      }
+    },
+    "caliper": {
+      "type": "double",
+      "description": "Borehole caliper measurement in inches",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "min": 0.0,
+        "max": 50.0
+      }
+    },
+    "carbonate_flag": {
+      "type": "boolean",
+      "description": "Flag indicating carbonate presence",
+      "required": false,
+      "indexed": false
+    },
+    "clay_volume": {
+      "type": "double",
+      "description": "Clay volume fraction (0-1)",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "min": 0.0,
+        "max": 1.0
+      }
+    },
+    "coal_flag": {
+      "type": "boolean",
+      "description": "Flag indicating coal presence",
+      "required": false,
+      "indexed": false
+    },
+    "core_permeability": {
+      "type": "double",
+      "description": "Core-measured permeability in mD",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "min": 0.0,
+        "max": 100000.0
+      }
+    },
+    "core_porosity": {
+      "type": "double",
+      "description": "Core-measured porosity (0-1)",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "min": 0.0,
+        "max": 1.0
+      }
+    },
+    "depth_end": {
+      "type": "double",
+      "description": "Ending depth of the measurement interval",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "min": 0.0,
+        "max": 50000.0
+      }
+    },
+    "facies_code": {
+      "type": "text",
+      "description": "Geological facies classification code",
+      "required": false,
+      "indexed": true,
+      "validation": {
+        "max_length": 50
+      }
+    },
+    "facies_confidence": {
+      "type": "double",
+      "description": "Confidence level in facies classification (0-1)",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "min": 0.0,
+        "max": 1.0
+      }
+    },
+    "file_checksum": {
+      "type": "text",
+      "description": "Checksum of the original file",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "max_length": 64
+      }
+    },
+    "file_origin": {
+      "type": "text",
+      "description": "Original file name or source",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "max_length": 500
+      }
+    },
+    "formation_press": {
+      "type": "double",
+      "description": "Formation pressure in psi",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "min": 0.0,
+        "max": 50000.0
+      }
+    },
+    "formation_temp": {
+      "type": "double",
+      "description": "Formation temperature in Celsius",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "min": -50.0,
+        "max": 300.0
+      }
+    },
+    "gas_oil_ratio": {
+      "type": "double",
+      "description": "Gas-oil ratio in scf/bbl",
+      "required": false,
+      "indexed": true,
+      "validation": {
+        "min": 0.0,
+        "max": 100000.0
+      }
+    },
+    "horizon_depth": {
+      "type": "double",
+      "description": "Depth of the geological horizon",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "min": 0.0,
+        "max": 50000.0
+      }
+    },
+    "horizon_name": {
+      "type": "text",
+      "description": "Name of geological horizon or formation",
+      "required": false,
+      "indexed": true,
+      "validation": {
+        "max_length": 100
+      }
+    },
+    "mud_flow_rate": {
+      "type": "double",
+      "description": "Mud flow rate in gpm",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "min": 0.0,
+        "max": 5000.0
+      }
+    },
+    "mud_viscosity": {
+      "type": "double",
+      "description": "Mud viscosity in cP",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "min": 0.0,
+        "max": 1000.0
+      }
+    },
+    "mud_weight_actual": {
+      "type": "double",
+      "description": "Actual mud weight in ppg",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "min": 0.0,
+        "max": 25.0
+      }
+    },
+    "null_count": {
+      "type": "int",
+      "description": "Number of null values in the interval",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "min": 0,
+        "max": 1000000
+      }
+    },
+    "num_samples": {
+      "type": "int",
+      "description": "Number of samples in the interval",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "min": 1,
+        "max": 1000000
+      }
+    },
+    "permeability": {
+      "type": "double",
+      "description": "Formation permeability in mD",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "min": 0.0,
+        "max": 100000.0
+      }
+    },
+    "plan_azimuth": {
+      "type": "double",
+      "description": "Planned wellbore azimuth in degrees",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "min": 0.0,
+        "max": 360.0
+      }
+    },
+    "plan_inclination": {
+      "type": "double",
+      "description": "Planned wellbore inclination in degrees",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "min": 0.0,
+        "max": 180.0
+      }
+    },
+    "plan_md": {
+      "type": "double",
+      "description": "Planned measured depth",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "min": 0.0,
+        "max": 50000.0
+      }
+    },
+    "plan_tvd": {
+      "type": "double",
+      "description": "Planned true vertical depth",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "min": 0.0,
+        "max": 50000.0
+      }
+    },
+    "porosity": {
+      "type": "double",
+      "description": "Formation porosity (0-1)",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "min": 0.0,
+        "max": 1.0
+      }
+    },
+    "processing_date": {
+      "type": "timestamp",
+      "description": "Date and time of data processing",
+      "required": false,
+      "indexed": false
+    },
+    "processing_software": {
+      "type": "text",
+      "description": "Software used for data processing",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "max_length": 100
+      }
+    },
+    "production_rate": {
+      "type": "double",
+      "description": "Production rate in bbl/d or mcf/d",
+      "required": false,
+      "indexed": true,
+      "validation": {
+        "min": 0.0,
+        "max": 100000.0
+      }
+    },
+    "pump_pressure": {
+      "type": "double",
+      "description": "Mud pump pressure in psi",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "min": 0.0,
+        "max": 10000.0
+      }
+    },
+    "qc_flag": {
+      "type": "boolean",
+      "description": "Quality control flag",
+      "required": false,
+      "indexed": false
+    },
+    "remarks": {
+      "type": "text",
+      "description": "Additional remarks or notes",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "max_length": 1000
+      }
+    },
+    "resistivity_deep": {
+      "type": "double",
+      "description": "Deep resistivity measurement in ohm-m",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "min": 0.0,
+        "max": 10000.0
+      }
+    },
+    "resistivity_medium": {
+      "type": "double",
+      "description": "Medium resistivity measurement in ohm-m",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "min": 0.0,
+        "max": 10000.0
+      }
+    },
+    "resistivity_shallow": {
+      "type": "double",
+      "description": "Shallow resistivity measurement in ohm-m",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "min": 0.0,
+        "max": 10000.0
+      }
+    },
+    "rop": {
+      "type": "double",
+      "description": "Rate of penetration in ft/hr",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "min": 0.0,
+        "max": 1000.0
+      }
+    },
+    "sample_interval": {
+      "type": "double",
+      "description": "Sampling interval for the measurement",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "min": 0.0,
+        "max": 1000.0
+      }
+    },
+    "sample_max": {
+      "type": "double",
+      "description": "Maximum value of samples in the interval",
+      "required": false,
+      "indexed": false
+    },
+    "sample_mean": {
+      "type": "double",
+      "description": "Mean value of samples in the interval",
+      "required": false,
+      "indexed": false
+    },
+    "sample_min": {
+      "type": "double",
+      "description": "Minimum value of samples in the interval",
+      "required": false,
+      "indexed": false
+    },
+    "sample_stddev": {
+      "type": "double",
+      "description": "Standard deviation of samples in the interval",
+      "required": false,
+      "indexed": false
+    },
+    "sand_flag": {
+      "type": "boolean",
+      "description": "Flag indicating sand presence",
+      "required": false,
+      "indexed": false
+    },
+    "seismic_inline": {
+      "type": "int",
+      "description": "Seismic inline number",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "min": 0,
+        "max": 999999
+      }
+    },
+    "seismic_sample_rate": {
+      "type": "double",
+      "description": "Seismic sampling rate in milliseconds",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "min": 0.0,
+        "max": 1000.0
+      }
+    },
+    "seismic_trace_count": {
+      "type": "int",
+      "description": "Number of seismic traces",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "min": 0,
+        "max": 1000000
+      }
+    },
+    "seismic_xline": {
+      "type": "int",
+      "description": "Seismic crossline number",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "min": 0,
+        "max": 999999
+      }
+    },
+    "service_company": {
+      "type": "text",
+      "description": "Name of the service company",
+      "required": false,
+      "indexed": true,
+      "validation": {
+        "max_length": 100
+      }
+    },
+    "sp_curves": {
+      "type": "double",
+      "description": "Spontaneous potential measurement in mV",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "min": -500.0,
+        "max": 500.0
+      }
+    },
+    "tool_type": {
+      "type": "text",
+      "description": "Type of logging or measurement tool",
+      "required": false,
+      "indexed": true,
+      "validation": {
+        "max_length": 100
+      }
+    },
+    "torque": {
+      "type": "double",
+      "description": "Drilling torque in ft-lbs",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "min": 0.0,
+        "max": 10000.0
+      }
+    },
+    "version": {
+      "type": "text",
+      "description": "Version of the data or processing",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "max_length": 50
+      }
+    },
+    "vp": {
+      "type": "double",
+      "description": "P-wave velocity in ft/s",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "min": 0.0,
+        "max": 30000.0
+      }
+    },
+    "vs": {
+      "type": "double",
+      "description": "S-wave velocity in ft/s",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "min": 0.0,
+        "max": 20000.0
+      }
+    },
+    "vshale": {
+      "type": "double",
+      "description": "Volume of shale (0-1)",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "min": 0.0,
+        "max": 1.0
+      }
+    },
+    "water_resistivity": {
+      "type": "double",
+      "description": "Formation water resistivity in ohm-m",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "min": 0.0,
+        "max": 1000.0
+      }
+    },
+    "water_saturation": {
+      "type": "double",
+      "description": "Water saturation (0-1)",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "min": 0.0,
+        "max": 1.0
+      }
+    },
+    "weight_on_bit": {
+      "type": "double",
+      "description": "Weight on bit in klbs",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "min": 0.0,
+        "max": 1000.0
+      }
+    },
+    "reserved_1": {
+      "type": "text",
+      "description": "Reserved field 1 for future use",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "max_length": 500
+      }
+    },
+    "reserved_2": {
+      "type": "text",
+      "description": "Reserved field 2 for future use",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "max_length": 500
+      }
+    },
+    "reserved_3": {
+      "type": "text",
+      "description": "Reserved field 3 for future use",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "max_length": 500
+      }
+    },
+    "reserved_4": {
+      "type": "text",
+      "description": "Reserved field 4 for future use",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "max_length": 500
+      }
+    },
+    "reserved_5": {
+      "type": "text",
+      "description": "Reserved field 5 for future use",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "max_length": 500
+      }
+    },
+    "reserved_6": {
+      "type": "text",
+      "description": "Reserved field 6 for future use",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "max_length": 500
+      }
+    },
+    "reserved_7": {
+      "type": "text",
+      "description": "Reserved field 7 for future use",
+      "required": false,
+      "indexed": false,
+      "validation": {
+        "max_length": 500
+      }
+    }
+  },
+  "indexes": {
+    "facies_code_idx": {
+      "field": "facies_code",
+      "type": "StorageAttachedIndex"
+    },
+    "gas_oil_ratio_idx": {
+      "field": "gas_oil_ratio",
+      "type": "StorageAttachedIndex"
+    },
+    "horizon_name_idx": {
+      "field": "horizon_name",
+      "type": "StorageAttachedIndex"
+    },
+    "production_rate_idx": {
+      "field": "production_rate",
+      "type": "StorageAttachedIndex"
+    },
+    "service_company_idx": {
+      "field": "service_company",
+      "type": "StorageAttachedIndex"
+    },
+    "tool_type_idx": {
+      "field": "tool_type",
+      "type": "StorageAttachedIndex"
+    }
+  },
+  "data_categories": {
+    "well_identification": ["well_id", "file_origin", "record_type"],
+    "depth_measurements": ["depth_start", "depth_end", "sample_interval", "num_samples"],
+    "statistical_analysis": ["sample_mean", "sample_min", "sample_max", "sample_stddev"],
+    "geological_classification": ["facies_code", "facies_confidence", "horizon_name", "horizon_depth"],
+    "wellbore_geometry": ["plan_md", "plan_tvd", "plan_inclination", "plan_azimuth"],
+    "seismic_data": ["seismic_inline", "seismic_xline", "seismic_sample_rate", "seismic_trace_count"],
+    "petrophysical_properties": ["vshale", "porosity", "water_saturation", "permeability", "bulk_vol_water", "clay_volume"],
+    "lithology_flags": ["carbonate_flag", "coal_flag", "sand_flag"],
+    "archie_parameters": ["archie_a", "archie_m", "archie_n", "water_resistivity"],
+    "formation_conditions": ["formation_temp", "formation_press"],
+    "core_data": ["core_porosity", "core_permeability"],
+    "acquisition_metadata": ["tool_type", "service_company", "processing_software"],
+    "temporal_data": ["acquisition_date", "processing_date"],
+    "quality_control": ["analyst", "qc_flag", "null_count"],
+    "documentation": ["remarks", "file_checksum", "version"],
+    "drilling_parameters": ["rop", "weight_on_bit", "torque", "pump_pressure"],
+    "mud_properties": ["mud_flow_rate", "mud_viscosity", "mud_weight_actual"],
+    "logging_measurements": ["caliper", "sp_curves", "resistivity_deep", "resistivity_medium", "resistivity_shallow"],
+    "acoustic_properties": ["vp", "vs"],
+    "production_data": ["production_rate", "gas_oil_ratio"],
+    "reserved_fields": ["reserved_1", "reserved_2", "reserved_3", "reserved_4", "reserved_5", "reserved_6", "reserved_7"]
+  },
+  "validation_rules": {
+    "depth_consistency": {
+      "description": "depth_end should be greater than depth_start",
+      "condition": "depth_end > depth_start"
+    },
+    "porosity_range": {
+      "description": "porosity should be between 0 and 1",
+      "condition": "porosity >= 0 AND porosity <= 1"
+    },
+    "saturation_sum": {
+      "description": "water_saturation + oil_saturation + gas_saturation should not exceed 1",
+      "condition": "water_saturation + (1 - water_saturation) <= 1"
+    }
+  }
+}
