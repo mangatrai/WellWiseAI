@@ -67,6 +67,13 @@ CREATE TABLE default_keyspace.petro_data (
     water_resistivity double,
     water_saturation double,
     weight_on_bit double,
+    country text,
+    state_province text,
+    field_name text,
+    block_name text,
+    latitude double,
+    longitude double,
+    elevation double,
     PRIMARY KEY ((well_id, record_type), curve_name, depth_start)
 ) WITH CLUSTERING ORDER BY (curve_name ASC, depth_start ASC)
     AND additional_write_policy = '99p'
@@ -89,3 +96,7 @@ CREATE CUSTOM INDEX petro_data_horizon_name_idx ON default_keyspace.petro_data (
 CREATE CUSTOM INDEX petro_data_production_rate_idx ON default_keyspace.petro_data (production_rate) USING 'StorageAttachedIndex';
 CREATE CUSTOM INDEX petro_data_service_company_idx ON default_keyspace.petro_data (service_company) USING 'StorageAttachedIndex';
 CREATE CUSTOM INDEX petro_data_tool_type_idx ON default_keyspace.petro_data (tool_type) USING 'StorageAttachedIndex';
+CREATE CUSTOM INDEX petro_data_country_idx ON default_keyspace.petro_data (country) USING 'StorageAttachedIndex';
+CREATE CUSTOM INDEX petro_data_field_name_idx ON default_keyspace.petro_data (field_name) USING 'StorageAttachedIndex';
+CREATE CUSTOM INDEX petro_data_latitude_idx ON default_keyspace.petro_data (latitude) USING 'StorageAttachedIndex';
+CREATE CUSTOM INDEX petro_data_longitude_idx ON default_keyspace.petro_data (longitude) USING 'StorageAttachedIndex';

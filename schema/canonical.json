@@ -636,67 +636,71 @@
         "max": 1000.0
       }
     },
-    "reserved_1": {
+    "country": {
       "type": "text",
-      "description": "Reserved field 1 for future use",
+      "description": "Country where the well is located (ISO country code)",
       "required": false,
-      "indexed": false,
+      "indexed": true,
       "validation": {
-        "max_length": 500
+        "max_length": 3,
+        "pattern": "^[A-Z]{2,3}$"
       }
     },
-    "reserved_2": {
+    "state_province": {
       "type": "text",
-      "description": "Reserved field 2 for future use",
+      "description": "State or province where the well is located",
       "required": false,
       "indexed": false,
       "validation": {
-        "max_length": 500
+        "max_length": 100
       }
     },
-    "reserved_3": {
+    "field_name": {
       "type": "text",
-      "description": "Reserved field 3 for future use",
+      "description": "Name of the oil/gas field",
       "required": false,
-      "indexed": false,
+      "indexed": true,
       "validation": {
-        "max_length": 500
+        "max_length": 200
       }
     },
-    "reserved_4": {
+    "block_name": {
       "type": "text",
-      "description": "Reserved field 4 for future use",
+      "description": "License block or area name",
       "required": false,
       "indexed": false,
       "validation": {
-        "max_length": 500
+        "max_length": 200
       }
     },
-    "reserved_5": {
-      "type": "text",
-      "description": "Reserved field 5 for future use",
+    "latitude": {
+      "type": "double",
+      "description": "Well latitude in decimal degrees",
       "required": false,
-      "indexed": false,
+      "indexed": true,
       "validation": {
-        "max_length": 500
+        "min": -90.0,
+        "max": 90.0
       }
     },
-    "reserved_6": {
-      "type": "text",
-      "description": "Reserved field 6 for future use",
+    "longitude": {
+      "type": "double",
+      "description": "Well longitude in decimal degrees",
       "required": false,
-      "indexed": false,
+      "indexed": true,
       "validation": {
-        "max_length": 500
+        "min": -180.0,
+        "max": 180.0
       }
     },
-    "reserved_7": {
-      "type": "text",
-      "description": "Reserved field 7 for future use",
+    "elevation": {
+      "type": "double",
+      "description": "Well elevation in meters above sea level",
       "required": false,
       "indexed": false,
       "validation": {
-        "max_length": 500
+        "min": -1000.0,
+        "max": 10000.0
       }
     }
   },
@@ -724,6 +728,22 @@
     "tool_type_idx": {
       "field": "tool_type",
       "type": "StorageAttachedIndex"
+    },
+    "country_idx": {
+      "field": "country",
+      "type": "StorageAttachedIndex"
+    },
+    "field_name_idx": {
+      "field": "field_name",
+      "type": "StorageAttachedIndex"
+    },
+    "latitude_idx": {
+      "field": "latitude",
+      "type": "StorageAttachedIndex"
+    },
+    "longitude_idx": {
+      "field": "longitude",
+      "type": "StorageAttachedIndex"
     }
   },
   "data_categories": {
@@ -747,7 +767,7 @@
     "logging_measurements": ["caliper", "sp_curves", "resistivity_deep", "resistivity_medium", "resistivity_shallow"],
     "acoustic_properties": ["vp", "vs"],
     "production_data": ["production_rate", "gas_oil_ratio"],
-    "reserved_fields": ["reserved_1", "reserved_2", "reserved_3", "reserved_4", "reserved_5", "reserved_6", "reserved_7"]
+    "geographic_data": ["country", "state_province", "field_name", "block_name", "latitude", "longitude", "elevation"]
   },
   "validation_rules": {
     "depth_consistency": {

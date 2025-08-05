@@ -51,31 +51,30 @@ def safe_get_attr(obj, attr_name, default=""):
         return default
 
 def extract_channel_values(channel, logger):
-    """Extract values from channel using the correct dlisio API."""
+    """Extract values from channel using dlisio API."""
     channel_name = safe_get_attr(channel, 'name', 'UNKNOWN')
-    logger.debug(f"DEBUG: Extracting values for channel '{channel_name}'")
+    logger.debug(f"Extracting values for channel '{channel_name}'")
     
     try:
-        # Use the correct dlisio API method
-        channel_curves = channel.curves()
+        # Get the curves data from the channel
+        curves = channel.curves()
         
-        if channel_curves is not None:
-            # Convert numpy array to list of floats, filtering out null values
+        if curves is not None and len(curves) > 0:
+            # Convert to list and filter out null values
             values = []
-            for val in channel_curves:
+            for val in curves:
                 # Skip null values (typically -999.25 or similar)
                 if val is not None and not np.isnan(val) and val > -999.0:
                     values.append(float(val))
             
-            logger.debug(f"DEBUG: Successfully extracted {len(values)} valid values from '{channel_name}'")
-            logger.debug(f"DEBUG: First 5 values: {values[:5] if len(values) >= 5 else values}")
+            logger.debug(f"Extracted {len(values)} valid values from '{channel_name}'")
             return values
         else:
-            logger.debug(f"DEBUG: Channel '{channel_name}' curves() returned None")
+            logger.debug(f"Channel '{channel_name}' has no valid curves data")
             return []
             
     except Exception as e:
-        logger.debug(f"DEBUG: Failed to extract values from '{channel_name}': {e}")
+        logger.debug(f"Failed to extract values from '{channel_name}': {e}")
         return []
 
 def extract_origin_info(logical_file, logger):
@@ -84,15 +83,22 @@ def extract_origin_info(logical_file, logger):
         'well_name': "",
         'company': "",
         'acquisition_date': "",
-        'version': ""
+        'version': "",
+        'service_company': "",
+        'analyst': ""
     }
     
     try:
-        origins = safe_get_attr(logical_file, 'origins', [])
+        # Get origins from the logical file
+        origins = logical_file.origins()
+        
         if origins and len(origins) > 0:
             origin = origins[0]
+            
+            # Extract well information
             origin_info['well_name'] = safe_get_attr(origin, 'well_name', "") or ""
             origin_info['company'] = safe_get_attr(origin, 'company', "") or ""
+            origin_info['service_company'] = safe_get_attr(origin, 'company', "") or ""
             origin_info['version'] = safe_get_attr(origin, 'version', "") or ""
             
             # Handle acquisition date
@@ -101,80 +107,255 @@ def extract_origin_info(logical_file, logger):
                 origin_info['acquisition_date'] = ct.isoformat()
             elif ct:
                 origin_info['acquisition_date'] = str(ct)
+                
+            # Extract analyst information if available
+            origin_info['analyst'] = safe_get_attr(origin, 'analyst', "") or ""
+            
     except Exception as e:
         logger.warning(f"Error extracting origin info: {e}")
     
     return origin_info
 
+def extract_tool_info(channel, logger):
+    """Extract tool information from channel."""
+    tool_info = {
+        'tool_type': "",
+        'processing_software': "",
+        'remarks': ""
+    }
+    
+    try:
+        # Get tool information from channel
+        tool_info['tool_type'] = safe_get_attr(channel, 'type', "") or ""
+        tool_info['processing_software'] = safe_get_attr(channel, 'software', "") or ""
+        tool_info['remarks'] = safe_get_attr(channel, 'long_name', "") or ""
+        
+    except Exception as e:
+        logger.debug(f"Error extracting tool info: {e}")
+    
+    return tool_info
+
+def find_depth_channel(channels, logger):
+    """Find the depth channel from available channels."""
+    depth_ch = None
+    
+    # Common depth channel names
+    depth_names = ['DEPTH', 'MD', 'TVD', 'TVDSS', 'KB', 'DEPT', 'DEPTH_MD', 'DEPTH_TVD']
+    
+    for ch in channels:
+        ch_name = safe_get_attr(ch, 'name', '').upper()
+        if ch_name in depth_names:
+            depth_ch = ch
+            logger.debug(f"Found depth channel: {ch_name}")
+            break
+    
+    # If no exact match, try partial matches
+    if not depth_ch:
+        for ch in channels:
+            ch_name = safe_get_attr(ch, 'name', '').upper()
+            if any(depth_word in ch_name for depth_word in ['DEPTH', 'MD', 'TVD', 'KB']):
+                depth_ch = ch
+                logger.debug(f"Using {ch_name} as depth channel")
+                break
+    
+    return depth_ch
+
+def compute_statistics(values):
+    """Compute statistics for a list of values."""
+    if not values:
+        return None, None, None, None, 0
+    
+    arr = np.array(values, dtype=float)
+    n = arr.size
+    
+    if n == 0:
+        return None, None, None, None, 0
+    
+    # Compute stats (handle NaN values)
+    mean = float(np.nanmean(arr)) if n else None
+    mn = float(np.nanmin(arr)) if n else None
+    mx = float(np.nanmax(arr)) if n else None
+    std = float(np.nanstd(arr)) if n else None
+    
+    return mean, mn, mx, std, n
+
+def map_channel_to_canonical(channel_name, values, depth_values, origin_info, tool_info, 
+                            file_info, logger):
+    """Map channel data to canonical schema."""
+    
+    # Compute statistics
+    mean, mn, mx, std, n = compute_statistics(values)
+    
+    if n == 0:
+        logger.debug(f"No valid data for channel {channel_name}")
+        return None
+    
+    # Calculate depth range
+    depth_start = depth_values[0] if depth_values else None
+    depth_end = depth_values[-1] if depth_values else None
+    sample_interval = (depth_values[1] - depth_values[0]) if len(depth_values) > 1 else None
+    
+    # Build canonical record
+    rec = {field: "" for field in CANONICAL_FIELDS}
+    
+    rec.update({
+        "well_id": origin_info['well_name'],
+        "file_origin": file_info['filename'],
+        "record_type": "logging",
+        "curve_name": channel_name,
+        "depth_start": depth_start,
+        "depth_end": depth_end,
+        "sample_interval": sample_interval,
+        "num_samples": n,
+        "sample_mean": mean,
+        "sample_min": mn,
+        "sample_max": mx,
+        "sample_stddev": std,
+        "service_company": origin_info['service_company'],
+        "processing_software": tool_info['processing_software'],
+        "acquisition_date": origin_info['acquisition_date'],
+        "processing_date": file_info['processing_date'],
+        "file_checksum": file_info['checksum'],
+        "version": origin_info['version'],
+        "tool_type": tool_info['tool_type'],
+        "analyst": origin_info['analyst'],
+        "remarks": tool_info['remarks'],
+        "null_count": len([v for v in values if v is None or np.isnan(v) or v <= -999.0])
+    })
+    
+    # Map specific channel types to canonical fields
+    channel_upper = channel_name.upper()
+    
+    # Petrophysical properties
+    if 'POROSITY' in channel_upper:
+        rec['porosity'] = mean
+    elif 'WATER_SAT' in channel_upper or 'SW' in channel_upper:
+        rec['water_saturation'] = mean
+    elif 'PERMEABILITY' in channel_upper or 'PERM' in channel_upper:
+        rec['permeability'] = mean
+    elif 'VSHALE' in channel_upper or 'VSH' in channel_upper:
+        rec['vshale'] = mean
+    elif 'CLAY' in channel_upper:
+        rec['clay_volume'] = mean
+    elif 'BULK_VOL_WATER' in channel_upper:
+        rec['bulk_vol_water'] = mean
+    
+    # Resistivity measurements
+    elif 'RESISTIVITY' in channel_upper:
+        if 'DEEP' in channel_upper:
+            rec['resistivity_deep'] = mean
+        elif 'MEDIUM' in channel_upper or 'MED' in channel_upper:
+            rec['resistivity_medium'] = mean
+        elif 'SHALLOW' in channel_upper or 'SHA' in channel_upper:
+            rec['resistivity_shallow'] = mean
+        else:
+            rec['resistivity_deep'] = mean  # Default to deep
+    
+    # Drilling parameters
+    elif 'ROP' in channel_upper:
+        rec['rop'] = mean
+    elif 'WOB' in channel_upper or 'WEIGHT_ON_BIT' in channel_upper:
+        rec['weight_on_bit'] = mean
+    elif 'TORQUE' in channel_upper:
+        rec['torque'] = mean
+    elif 'PUMP_PRESSURE' in channel_upper:
+        rec['pump_pressure'] = mean
+    
+    # Mud properties
+    elif 'MUD_FLOW' in channel_upper:
+        rec['mud_flow_rate'] = mean
+    elif 'MUD_VISCOSITY' in channel_upper:
+        rec['mud_viscosity'] = mean
+    elif 'MUD_WEIGHT' in channel_upper:
+        rec['mud_weight_actual'] = mean
+    
+    # Logging measurements
+    elif 'CALIPER' in channel_upper:
+        rec['caliper'] = mean
+    elif 'SP' in channel_upper or 'SPONTANEOUS' in channel_upper:
+        rec['sp_curves'] = mean
+    
+    # Acoustic properties
+    elif 'VP' in channel_upper or 'P_WAVE' in channel_upper:
+        rec['vp'] = mean
+    elif 'VS' in channel_upper or 'S_WAVE' in channel_upper:
+        rec['vs'] = mean
+    
+    # Formation conditions
+    elif 'FORMATION_TEMP' in channel_upper or 'TEMP' in channel_upper:
+        rec['formation_temp'] = mean
+    elif 'FORMATION_PRESS' in channel_upper or 'PRESSURE' in channel_upper:
+        rec['formation_press'] = mean
+    
+    # Archie parameters
+    elif 'ARCHIE_A' in channel_upper:
+        rec['archie_a'] = mean
+    elif 'ARCHIE_M' in channel_upper:
+        rec['archie_m'] = mean
+    elif 'ARCHIE_N' in channel_upper:
+        rec['archie_n'] = mean
+    elif 'WATER_RESISTIVITY' in channel_upper or 'RW' in channel_upper:
+        rec['water_resistivity'] = mean
+    
+    # Production data
+    elif 'PRODUCTION_RATE' in channel_upper:
+        rec['production_rate'] = mean
+    elif 'GAS_OIL_RATIO' in channel_upper or 'GOR' in channel_upper:
+        rec['gas_oil_ratio'] = mean
+    
+    return rec
+
 def parse_dlis(file_path: str, logger: logging.Logger) -> list[dict]:
     """
-    Robust DLIS parser: extract depth and channel values using DLISIO, compute stats,
-    and map into the 75-field canonical schema.
+    Comprehensive DLIS parser: extract all available data from DLIS files
+    and map to the 75-field canonical schema.
     """
-    logger.debug(f"Starting to parse {file_path}")
+    logger.info(f"Starting to parse DLIS file: {file_path}")
     
-    fname = os.path.basename(file_path)
-    checksum = compute_checksum(file_path)
-    processing_date = datetime.utcnow().isoformat()
+    file_info = {
+        'filename': os.path.basename(file_path),
+        'checksum': compute_checksum(file_path),
+        'processing_date': datetime.utcnow().isoformat()
+    }
     
     records = []
     
     try:
         with load(str(file_path)) as logical_files:
-            logger.debug(f"Found {len(logical_files)} logical files")
+            logger.info(f"Found {len(logical_files)} logical files")
             
             for lf_idx, lf in enumerate(logical_files):
-                logger.debug(f"Processing logical file {lf_idx + 1}")
+                logger.info(f"Processing logical file {lf_idx + 1}")
                 
                 # Extract origin information
                 origin_info = extract_origin_info(lf, logger)
                 logger.debug(f"Origin info: {origin_info}")
                 
                 # Process each frame
-                frames = safe_get_attr(lf, 'frames', [])
-                logger.debug(f"Found {len(frames)} frames")
+                frames = lf.frames()
+                logger.info(f"Found {len(frames)} frames")
                 
                 for frame_idx, frame in enumerate(frames):
                     try:
                         logger.debug(f"Processing frame {frame_idx + 1}")
                         
-                        # Find the DEPTH channel
-                        depth_ch = None
-                        channels = safe_get_attr(frame, 'channels', [])
+                        # Get channels from frame
+                        channels = frame.channels()
                         logger.debug(f"Found {len(channels)} channels in frame")
                         
-                        # Log all channel names for debugging
-                        channel_names = []
-                        for ch in channels:
-                            ch_name = safe_get_attr(ch, 'name', '')
-                            channel_names.append(ch_name)
-                            logger.debug(f"Channel: {ch_name}")
-                        
-                        for ch in channels:
-                            ch_name = safe_get_attr(ch, 'name', '')
-                            if isinstance(ch_name, str) and ch_name.strip().upper() == 'DEPTH':
-                                depth_ch = ch
-                                logger.debug(f"Found DEPTH channel: {ch_name}")
-                                break
+                        # Find depth channel
+                        depth_ch = find_depth_channel(channels, logger)
                         
                         if not depth_ch:
-                            logger.debug(f"No DEPTH channel found, trying alternative depth channels")
-                            # Try to find any channel that might be depth-related
-                            for ch in channels:
-                                ch_name = safe_get_attr(ch, 'name', '').upper()
-                                if any(depth_word in ch_name for depth_word in ['MD', 'TVD', 'TVDSS', 'KB']):
-                                    depth_ch = ch
-                                    logger.debug(f"Using {ch_name} as depth channel")
-                                    break
-                            if not depth_ch:
-                                logger.debug(f"No depth channel found, skipping frame")
-                                continue
+                            logger.warning(f"No depth channel found in frame {frame_idx + 1}")
+                            continue
                         
                         # Extract depth values
-                        depths = extract_channel_values(depth_ch, logger)
-                        logger.debug(f"Extracted {len(depths)} depth values")
-                        if not depths:
-                            logger.debug(f"No depth values found")
+                        depth_values = extract_channel_values(depth_ch, logger)
+                        logger.debug(f"Extracted {len(depth_values)} depth values")
+                        
+                        if not depth_values:
+                            logger.warning(f"No depth values found in frame {frame_idx + 1}")
                             continue
                         
                         # Process each channel (except depth)
@@ -187,57 +368,23 @@ def parse_dlis(file_path: str, logger: logging.Logger) -> list[dict]:
                             
                             # Extract channel values
                             values = extract_channel_values(ch, logger)
-                            logger.debug(f"Extracted {len(values)} values for channel {ch_name}")
                             
                             if not values:
                                 logger.debug(f"No values found for channel {ch_name}")
                                 continue
                             
-                            # Compute statistics
-                            arr = np.array(values, dtype=float)
-                            n = arr.size
+                            # Extract tool information
+                            tool_info = extract_tool_info(ch, logger)
                             
-                            # Skip if no valid data
-                            if n == 0:
-                                logger.debug(f"No valid data for channel {ch_name}")
-                                continue
+                            # Map to canonical schema
+                            rec = map_channel_to_canonical(
+                                ch_name, values, depth_values, origin_info, 
+                                tool_info, file_info, logger
+                            )
                             
-                            # Compute stats (handle NaN values)
-                            mean = float(np.nanmean(arr)) if n else None
-                            mn = float(np.nanmin(arr)) if n else None
-                            mx = float(np.nanmax(arr)) if n else None
-                            std = float(np.nanstd(arr)) if n else None
-                            
-                            logger.debug(f"Stats for {ch_name}: mean={mean}, min={mn}, max={mx}, std={std}")
-                            
-                            # Build the canonical record
-                            rec = {c: "" for c in CANONICAL_FIELDS}  # Use empty strings instead of None
-                            rec.update({
-                                "well_id": origin_info['well_name'] or "",
-                                "file_origin": fname,
-                                "record_type": "log_curve",
-                                "curve_name": (safe_get_attr(ch, "name", "") or safe_get_attr(ch, "mnemonic", "")) or "",
-                                "depth_start": depths[0] if depths else "",
-                                "depth_end": depths[-1] if depths else "",
-                                "sample_interval": (depths[1] - depths[0]) if len(depths) > 1 else "",
-                                "num_samples": int(n),
-                                "sample_mean": mean or "",
-                                "sample_min": mn or "",
-                                "sample_max": mx or "",
-                                "sample_stddev": std or "",
-                                "service_company": origin_info['company'] or "",
-                                "processing_software": "",
-                                "acquisition_date": origin_info['acquisition_date'] or "",
-                                "processing_date": processing_date,
-                                "file_checksum": checksum,
-                                "version": origin_info['version'] or "",
-                                "tool_type": safe_get_attr(ch, "type", "") or "",
-                                "analyst": "",
-                                "remarks": safe_get_attr(ch, "long_name", "") or "",
-                            })
-                            
-                            records.append(rec)
-                            logger.debug(f"Added record for channel {ch_name}")
+                            if rec:
+                                records.append(rec)
+                                logger.debug(f"Added record for channel {ch_name}")
                     
                     except Exception as e:
                         logger.error(f"Error processing frame {frame_idx + 1}: {e}")
@@ -247,5 +394,5 @@ def parse_dlis(file_path: str, logger: logging.Logger) -> list[dict]:
         logger.error(f"Error loading DLIS file {file_path}: {e}")
         return []
     
-    logger.debug(f"Total records extracted from {file_path}: {len(records)}")
+    logger.info(f"Total records extracted from {file_path}: {len(records)}")
     return records
