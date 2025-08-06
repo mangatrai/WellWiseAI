@@ -146,11 +146,13 @@ def process_single_file(file_path: str, parser_func, logger: logging.Logger,
 
 # Import your parsers
 from parsers.dlis import parse_dlis
+from parsers.las import parse_las
 
 # Map file extensions to parser functions
 PARSERS = {
     ".dlis": parse_dlis,
-    # add others here: ".las": parse_las, etc.
+    ".las": parse_las,
+    # add others here: etc.
 }
 
 def main():

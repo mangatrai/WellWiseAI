@@ -7,32 +7,7 @@ from datetime import datetime
 from dlisio.dlis import load
 import logging
 
-# === Exactly 75 canonical fields ===
-CANONICAL_FIELDS = [
-    "well_id","file_origin","record_type","curve_name",
-    "depth_start","depth_end","sample_interval","num_samples",
-    "sample_mean","sample_min","sample_max","sample_stddev",
-    "facies_code","facies_confidence","horizon_name","horizon_depth",
-    "plan_md","plan_tvd","plan_inclination","plan_azimuth",
-    "seismic_inline","seismic_xline","seismic_sample_rate","seismic_trace_count",
-    "vshale","porosity","water_saturation","permeability",
-    "bulk_vol_water","clay_volume",
-    "carbonate_flag","coal_flag","sand_flag",
-    "archie_a","archie_m","archie_n",
-    "water_resistivity","formation_temp","formation_press",
-    "core_porosity","core_permeability",
-    "tool_type","service_company","processing_software",
-    "acquisition_date","processing_date","analyst",
-    "qc_flag","null_count",
-    "remarks","file_checksum","version",
-    "rop","weight_on_bit","torque","pump_pressure",
-    "mud_flow_rate","mud_viscosity","mud_weight_actual","caliper",
-    "sp_curves","resistivity_deep","resistivity_medium","resistivity_shallow",
-    "vp","vs","production_rate","gas_oil_ratio",
-    # 7 geographic fields
-    "country","state_province","field_name","block_name",
-    "latitude","longitude","elevation"
-]
+from schema.fields import CANONICAL_FIELDS
 
 def compute_checksum(path: str) -> str:
     """Compute SHA1 checksum of file."""
