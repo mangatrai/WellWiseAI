@@ -644,7 +644,10 @@ def map_channel_to_canonical(channel_name, values, depth_values, origin_info, to
     elif 'GR' in curve_upper or 'GAMMA' in curve_upper:
         rec['gamma_ray'] = mean
     elif 'DT' in curve_upper or 'SONIC' in curve_upper:
-        rec['sonic_transit_time'] = mean
+        # Add to remarks since sonic_transit_time is not in canonical schema
+        if 'remarks' not in rec:
+            rec['remarks'] = ""
+        rec['remarks'] += f"sonic_transit_time: {mean}; "
     elif 'CALI' in curve_upper:
         rec['caliper'] = mean
     elif 'PEF' in curve_upper:
