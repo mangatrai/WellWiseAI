@@ -29,9 +29,9 @@ CANONICAL_FIELDS = [
     "mud_flow_rate","mud_viscosity","mud_weight_actual","caliper",
     "sp_curves","resistivity_deep","resistivity_medium","resistivity_shallow",
     "vp","vs","production_rate","gas_oil_ratio",
-    # 7 reserved slots
-    "reserved_1","reserved_2","reserved_3","reserved_4",
-    "reserved_5","reserved_6","reserved_7"
+    # 7 geographic fields
+    "country","state_province","field_name","block_name",
+    "latitude","longitude","elevation"
 ]
 
 def compute_checksum(path: str) -> str:
@@ -49,6 +49,38 @@ def safe_get_attr(obj, attr_name, default=""):
         return value
     except Exception:
         return default
+
+def dms_to_decimal(dms_str):
+    """Convert DMS (Degrees, Minutes, Seconds) format to decimal degrees."""
+    try:
+        # Handle format like "058 26' 29.706" N    DMS"
+        if not dms_str or 'DMS' not in dms_str:
+            return None
+            
+        # Extract the DMS part
+        dms_part = dms_str.split('DMS')[0].strip()
+        
+        # Parse degrees, minutes, seconds
+        parts = dms_part.replace('"', '').replace("'", ' ').split()
+        
+        if len(parts) >= 4:  # degrees, minutes, seconds, direction
+            degrees = float(parts[0])
+            minutes = float(parts[1])
+            seconds = float(parts[2])
+            direction = parts[3]
+            
+            # Calculate decimal degrees
+            decimal = degrees + (minutes / 60.0) + (seconds / 3600.0)
+            
+            # Apply direction
+            if direction in ['S', 'W']:
+                decimal = -decimal
+                
+            return decimal
+        else:
+            return None
+    except Exception:
+        return None
 
 def extract_channel_values(channel, logger):
     """Extract values from channel using dlisio API."""
@@ -90,7 +122,7 @@ def extract_origin_info(logical_file, logger):
     
     try:
         # Get origins from the logical file
-        origins = logical_file.origins()
+        origins = logical_file.origins
         
         if origins and len(origins) > 0:
             origin = origins[0]
@@ -134,6 +166,95 @@ def extract_tool_info(channel, logger):
         logger.debug(f"Error extracting tool info: {e}")
     
     return tool_info
+
+def extract_geographic_info(logical_file, logger):
+    """Extract geographic information from logical file and parameters."""
+    geo_info = {
+        'country': "",
+        'state_province': "",
+        'field_name': "",
+        'block_name': "",
+        'latitude': None,
+        'longitude': None,
+        'elevation': None,
+        'service_company': ""
+    }
+    
+    try:
+        # Get origins for geographic data
+        origins = logical_file.origins
+        
+        if origins and len(origins) > 0:
+            origin = origins[0]
+            
+            # Extract field name from origin
+            geo_info['field_name'] = safe_get_attr(origin, 'field_name', "") or ""
+            
+            # Try to get geographic info from origin attributes
+            geo_info['country'] = safe_get_attr(origin, 'country', "") or ""
+            geo_info['state_province'] = safe_get_attr(origin, 'state', "") or ""
+            geo_info['block_name'] = safe_get_attr(origin, 'block_name', "") or ""
+            
+            # Try to extract coordinates
+            lat = safe_get_attr(origin, 'latitude', None)
+            lon = safe_get_attr(origin, 'longitude', None)
+            elev = safe_get_attr(origin, 'elevation', None)
+            
+            if lat is not None:
+                geo_info['latitude'] = float(lat)
+            if lon is not None:
+                geo_info['longitude'] = float(lon)
+            if elev is not None:
+                geo_info['elevation'] = float(elev)
+        
+        # Try to get geographic info from parameters
+        try:
+            parameters = logical_file.parameters
+            logger.debug(f"Found {len(parameters)} parameters")
+            for param in parameters:
+                param_name = safe_get_attr(param, 'name', '').upper()
+                param_values = safe_get_attr(param, 'values', [])
+                logger.debug(f"Parameter {param_name}: values = {param_values}")
+                
+                # Get the first value from the list
+                param_value = param_values[0] if param_values else ""
+                
+                if param_name in ['LATI', 'LAT', 'LATITUDE'] and param_value:
+                    # Convert DMS to decimal degrees
+                    decimal_lat = dms_to_decimal(param_value)
+                    if decimal_lat is not None:
+                        geo_info['latitude'] = decimal_lat
+                elif param_name in ['LONG', 'LON', 'LONGITUDE'] and param_value:
+                    # Convert DMS to decimal degrees
+                    decimal_lon = dms_to_decimal(param_value)
+                    if decimal_lon is not None:
+                        geo_info['longitude'] = decimal_lon
+                elif param_name in ['ELEV', 'ELEVATION', 'KB', 'EDF', 'EGL', 'ELZ'] and param_value:
+                    # Use EDF (Elevation DF) as primary elevation, fallback to others
+                    if param_name == 'EDF' or geo_info['elevation'] is None:
+                        try:
+                            geo_info['elevation'] = float(param_value)
+                        except:
+                            pass
+                elif param_name in ['CTRY', 'COUNTRY'] and param_value:
+                    geo_info['country'] = str(param_value)
+                elif param_name in ['COUN'] and param_value:
+                    # COUN parameter contains rig/company name
+                    geo_info['service_company'] = str(param_value)
+                elif param_name in ['STATE', 'PROVINCE'] and param_value:
+                    geo_info['state_province'] = str(param_value)
+                elif param_name in ['FIELD', 'FIELD_NAME', 'FN'] and param_value:
+                    geo_info['field_name'] = str(param_value)
+                elif param_name in ['BLOCK', 'BLOCK_NAME'] and param_value:
+                    geo_info['block_name'] = str(param_value)
+                    
+        except Exception as e:
+            logger.debug(f"Error extracting geographic info from parameters: {e}")
+            
+    except Exception as e:
+        logger.debug(f"Error extracting geographic info: {e}")
+    
+    return geo_info
 
 def find_depth_channel(channels, logger):
     """Find the depth channel from available channels."""
@@ -180,7 +301,7 @@ def compute_statistics(values):
     return mean, mn, mx, std, n
 
 def map_channel_to_canonical(channel_name, values, depth_values, origin_info, tool_info, 
-                            file_info, logger):
+                            geo_info, file_info, logger):
     """Map channel data to canonical schema."""
     
     # Compute statistics
@@ -197,6 +318,12 @@ def map_channel_to_canonical(channel_name, values, depth_values, origin_info, to
     
     # Build canonical record
     rec = {field: "" for field in CANONICAL_FIELDS}
+    
+    # Set hard-coded defaults for fields with no extraction logic
+    rec.update({
+        "facies_code": "UNKNOWN",
+        "horizon_name": "UNKNOWN"
+    })
     
     rec.update({
         "well_id": origin_info['well_name'],
@@ -220,7 +347,16 @@ def map_channel_to_canonical(channel_name, values, depth_values, origin_info, to
         "tool_type": tool_info['tool_type'],
         "analyst": origin_info['analyst'],
         "remarks": tool_info['remarks'],
-        "null_count": len([v for v in values if v is None or np.isnan(v) or v <= -999.0])
+        "null_count": len([v for v in values if v is None or np.isnan(v) or v <= -999.0]),
+        # Geographic fields
+        "country": geo_info['country'],
+        "state_province": geo_info['state_province'],
+        "field_name": geo_info['field_name'],
+        "block_name": geo_info['block_name'],
+        "latitude": geo_info['latitude'],
+        "longitude": geo_info['longitude'],
+        "elevation": geo_info['elevation'],
+        "service_company": geo_info.get('service_company', "")
     })
     
     # Map specific channel types to canonical fields
@@ -303,6 +439,16 @@ def map_channel_to_canonical(channel_name, values, depth_values, origin_info, to
     elif 'GAS_OIL_RATIO' in channel_upper or 'GOR' in channel_upper:
         rec['gas_oil_ratio'] = mean
     
+    # Set conditional defaults for fields with extraction logic
+    if not rec.get('production_rate'):
+        rec['production_rate'] = 0.0
+    if not rec.get('gas_oil_ratio'):
+        rec['gas_oil_ratio'] = 0.0
+    if not rec.get('latitude') or rec.get('latitude') is None:
+        rec['latitude'] = 0.0
+    if not rec.get('longitude') or rec.get('longitude') is None:
+        rec['longitude'] = 0.0
+    
     return rec
 
 def parse_dlis(file_path: str, logger: logging.Logger) -> list[dict]:
@@ -331,8 +477,12 @@ def parse_dlis(file_path: str, logger: logging.Logger) -> list[dict]:
                 origin_info = extract_origin_info(lf, logger)
                 logger.debug(f"Origin info: {origin_info}")
                 
+                # Extract geographic information
+                geo_info = extract_geographic_info(lf, logger)
+                logger.debug(f"Geographic info: {geo_info}")
+                
                 # Process each frame
-                frames = lf.frames()
+                frames = lf.frames
                 logger.info(f"Found {len(frames)} frames")
                 
                 for frame_idx, frame in enumerate(frames):
@@ -340,7 +490,7 @@ def parse_dlis(file_path: str, logger: logging.Logger) -> list[dict]:
                         logger.debug(f"Processing frame {frame_idx + 1}")
                         
                         # Get channels from frame
-                        channels = frame.channels()
+                        channels = frame.channels
                         logger.debug(f"Found {len(channels)} channels in frame")
                         
                         # Find depth channel
@@ -379,7 +529,7 @@ def parse_dlis(file_path: str, logger: logging.Logger) -> list[dict]:
                             # Map to canonical schema
                             rec = map_channel_to_canonical(
                                 ch_name, values, depth_values, origin_info, 
-                                tool_info, file_info, logger
+                                tool_info, geo_info, file_info, logger
                             )
                             
                             if rec:
