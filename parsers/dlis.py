@@ -98,6 +98,37 @@ def extract_file_metadata(logical_file, logger):
         'remarks': []  # For metadata that doesn't fit canonical fields
     }
     
+    # Extract rich parameter data from logical file
+    try:
+        parameters = logical_file.parameters
+        if parameters:
+            logger.debug(f"Found {len(parameters)} parameters for metadata extraction")
+            for param in parameters:
+                param_name = safe_get_attr(param, 'name', '').upper()
+                param_values = safe_get_attr(param, 'values', [])
+                param_long_name = safe_get_attr(param, 'long_name', '')
+                
+                # Get the first value from the list
+                param_value = param_values[0] if param_values else ""
+                
+                # Map to file metadata fields
+                if param_name == 'CN' and not file_metadata['client_name']:
+                    file_metadata['client_name'] = param_value
+                elif param_name == 'WN' and not file_metadata['job_id']:
+                    file_metadata['job_id'] = param_value
+                elif param_name == 'FN' and not file_metadata['formation']:
+                    file_metadata['formation'] = param_value
+                elif param_name == 'RUN' and not file_metadata['log_date']:
+                    file_metadata['log_date'] = param_value
+                elif param_name == 'R1' and not file_metadata['software']:
+                    file_metadata['software'] = param_value
+                else:
+                    # Add to remarks for non-canonical parameters
+                    file_metadata['remarks'].append(f"Param_{param_name}: {param_value}")
+                    
+    except Exception as e:
+        logger.debug(f"Error extracting parameter metadata: {e}")
+    
     try:
         # Extract metadata from logical file - try different approaches
         metadata = None
@@ -174,30 +205,35 @@ def extract_computations_and_parameters(logical_file, logger):
                     # Add to remarks for non-canonical parameters
                     comp_params['remarks'].append(f"Computation_{mnemonic}: {params}")
         
-        # Extract parameters
+        # Extract parameters - FIXED: Use correct API structure
         parameters = logical_file.parameters
         if parameters:
             logger.debug(f"Found {len(parameters)} parameters")
             for param in parameters:
-                mnemonic = safe_get_attr(param, 'mnemonic', '').upper()
-                value = safe_get_attr(param, 'value', '')
+                # Use the correct attribute names from the debug output
+                param_name = safe_get_attr(param, 'name', '').upper()
+                param_values = safe_get_attr(param, 'values', [])
+                param_long_name = safe_get_attr(param, 'long_name', '')
                 
-                # Skip empty mnemonics
-                if not mnemonic:
+                # Skip empty names
+                if not param_name:
                     continue
                 
+                # Get the first value from the list
+                param_value = param_values[0] if param_values else ""
+                
                 # Map to canonical fields
-                if mnemonic == 'A' or 'ARCHIE_A' in mnemonic:
-                    comp_params['archie_a'] = value
-                elif mnemonic == 'M' or 'ARCHIE_M' in mnemonic:
-                    comp_params['archie_m'] = value
-                elif mnemonic == 'N' or 'ARCHIE_N' in mnemonic:
-                    comp_params['archie_n'] = value
-                elif mnemonic == 'RW' or 'WATER_RESISTIVITY' in mnemonic:
-                    comp_params['water_resistivity'] = value
+                if param_name == 'A' or 'ARCHIE_A' in param_name:
+                    comp_params['archie_a'] = param_value
+                elif param_name == 'M' or 'ARCHIE_M' in param_name:
+                    comp_params['archie_m'] = param_value
+                elif param_name == 'N' or 'ARCHIE_N' in param_name:
+                    comp_params['archie_n'] = param_value
+                elif param_name == 'RW' or 'WATER_RESISTIVITY' in param_name:
+                    comp_params['water_resistivity'] = param_value
                 else:
                     # Add to remarks for non-canonical parameters
-                    comp_params['remarks'].append(f"Parameter_{mnemonic}: {value}")
+                    comp_params['remarks'].append(f"Parameter_{param_name}: {param_value}")
                     
     except Exception as e:
         logger.debug(f"Error extracting computations and parameters: {e}")
@@ -416,8 +452,11 @@ def extract_geographic_info(logical_file, logger):
             
             if parameters:
                 for param in parameters:
-                    param_name = safe_get_attr(param, 'mnemonic', '').upper()
-                    param_value = safe_get_attr(param, 'value', '')
+                    param_name = safe_get_attr(param, 'name', '').upper()
+                    param_values = safe_get_attr(param, 'values', [])
+                    
+                    # Get the first value from the list
+                    param_value = param_values[0] if param_values else ""
                     
                     # Map geographic parameters
                     if param_name == 'CTRY' and not geo_info['country']:
