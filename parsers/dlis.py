@@ -84,6 +84,195 @@ def extract_channel_values(channel, logger):
         logger.debug(f"Failed to extract values from '{channel_name}': {e}")
         return []
 
+def extract_file_metadata(logical_file, logger):
+    """Extract comprehensive file-level metadata from logical file."""
+    file_metadata = {
+        'job_id': "",
+        'client_name': "",
+        'formation': "",
+        'log_date': "",
+        'run_start_date': "",
+        'run_stop_date': "",
+        'software': "",
+        'comments': "",
+        'remarks': []  # For metadata that doesn't fit canonical fields
+    }
+    
+    try:
+        # Extract metadata from logical file - try different approaches
+        metadata = None
+        try:
+            metadata = logical_file.metadata
+        except AttributeError:
+            # Try alternative access methods
+            try:
+                metadata = getattr(logical_file, 'metadata', None)
+            except:
+                pass
+        
+        if metadata:
+            file_metadata['job_id'] = metadata.get("JOB_ID", "") or ""
+            file_metadata['client_name'] = metadata.get("CLIENT", "") or ""
+            file_metadata['formation'] = metadata.get("FORMATION", "") or ""
+            file_metadata['log_date'] = metadata.get("LOGGED_DATE", "") or ""
+            file_metadata['run_start_date'] = metadata.get("RUN_START_DATE", "") or ""
+            file_metadata['run_stop_date'] = metadata.get("RUN_STOP_DATE", "") or ""
+            file_metadata['software'] = metadata.get("SOFTWARE", "") or ""
+        
+        # Extract comments
+        try:
+            comments = logical_file.comments
+            if comments:
+                file_metadata['comments'] = "\n".join(comments)
+        except Exception as e:
+            logger.debug(f"Error extracting comments: {e}")
+        
+        # Extract additional metadata that doesn't fit canonical fields
+        additional_metadata = []
+        if metadata:
+            for key, value in metadata.items():
+                if key not in ["JOB_ID", "CLIENT", "FORMATION", "LOGGED_DATE", "RUN_START_DATE", "RUN_STOP_DATE", "SOFTWARE"]:
+                    additional_metadata.append(f"{key}: {value}")
+        
+        if additional_metadata:
+            file_metadata['remarks'].extend(additional_metadata)
+            
+    except Exception as e:
+        logger.debug(f"Error extracting file metadata: {e}")
+    
+    return file_metadata
+
+def extract_computations_and_parameters(logical_file, logger):
+    """Extract computations and parameters from logical file."""
+    comp_params = {
+        'archie_a': None,
+        'archie_m': None,
+        'archie_n': None,
+        'water_resistivity': None,
+        'remarks': []  # For parameters that don't fit canonical fields
+    }
+    
+    try:
+        # Extract computations
+        computations = logical_file.computations
+        if computations:
+            logger.debug(f"Found {len(computations)} computations")
+            for comp in computations:
+                mnemonic = safe_get_attr(comp, 'mnemonic', '').upper()
+                params = safe_get_attr(comp, 'parameters', {})
+                
+                # Map to canonical fields
+                if mnemonic == 'A' or 'ARCHIE_A' in mnemonic:
+                    comp_params['archie_a'] = params.get('value', None)
+                elif mnemonic == 'M' or 'ARCHIE_M' in mnemonic:
+                    comp_params['archie_m'] = params.get('value', None)
+                elif mnemonic == 'N' or 'ARCHIE_N' in mnemonic:
+                    comp_params['archie_n'] = params.get('value', None)
+                elif mnemonic == 'RW' or 'WATER_RESISTIVITY' in mnemonic:
+                    comp_params['water_resistivity'] = params.get('value', None)
+                else:
+                    # Add to remarks for non-canonical parameters
+                    comp_params['remarks'].append(f"Computation_{mnemonic}: {params}")
+        
+        # Extract parameters
+        parameters = logical_file.parameters
+        if parameters:
+            logger.debug(f"Found {len(parameters)} parameters")
+            for param in parameters:
+                mnemonic = safe_get_attr(param, 'mnemonic', '').upper()
+                value = safe_get_attr(param, 'value', '')
+                
+                # Skip empty mnemonics
+                if not mnemonic:
+                    continue
+                
+                # Map to canonical fields
+                if mnemonic == 'A' or 'ARCHIE_A' in mnemonic:
+                    comp_params['archie_a'] = value
+                elif mnemonic == 'M' or 'ARCHIE_M' in mnemonic:
+                    comp_params['archie_m'] = value
+                elif mnemonic == 'N' or 'ARCHIE_N' in mnemonic:
+                    comp_params['archie_n'] = value
+                elif mnemonic == 'RW' or 'WATER_RESISTIVITY' in mnemonic:
+                    comp_params['water_resistivity'] = value
+                else:
+                    # Add to remarks for non-canonical parameters
+                    comp_params['remarks'].append(f"Parameter_{mnemonic}: {value}")
+                    
+    except Exception as e:
+        logger.debug(f"Error extracting computations and parameters: {e}")
+    
+    return comp_params
+
+def extract_calibrations_and_equipment(logical_file, logger):
+    """Extract calibrations and equipment data from logical file."""
+    calib_equip = {
+        'calibration_scale': None,
+        'calibration_offset': None,
+        'equipment_model': "",
+        'equipment_serial': "",
+        'equipment_vendor': "",
+        'remarks': []  # For data that doesn't fit canonical fields
+    }
+    
+    try:
+        # Extract calibrations
+        calibrations = logical_file.calibrations
+        if calibrations:
+            logger.debug(f"Found {len(calibrations)} calibrations")
+            for cal in calibrations:
+                curve_name = safe_get_attr(cal, 'channel_name', '')
+                scale = safe_get_attr(cal, 'scale_factor', None)
+                offset = safe_get_attr(cal, 'offset', None)
+                units = safe_get_attr(cal, 'units', '')
+                
+                # Store calibration data in remarks
+                calib_equip['remarks'].append(f"Calibration_{curve_name}: scale={scale}, offset={offset}, units={units}")
+        
+        # Extract equipment
+        equipments = logical_file.equipments
+        if equipments:
+            logger.debug(f"Found {len(equipments)} equipments")
+            for eq in equipments:
+                model = safe_get_attr(eq, 'model', '')
+                serial = safe_get_attr(eq, 'serial_number', '')
+                vendor = safe_get_attr(eq, 'manufacturer', '')
+                
+                # Store equipment data in remarks
+                calib_equip['remarks'].append(f"Equipment: model={model}, serial={serial}, vendor={vendor}")
+                
+    except Exception as e:
+        logger.debug(f"Error extracting calibrations and equipment: {e}")
+    
+    return calib_equip
+
+def extract_zones(logical_file, logger):
+    """Extract zone definitions from logical file."""
+    zones_data = {
+        'zone_name': "",
+        'zone_top': None,
+        'zone_base': None,
+        'remarks': []  # For zone data that doesn't fit canonical fields
+    }
+    
+    try:
+        # Extract zones
+        zones = logical_file.zones
+        if zones:
+            logger.debug(f"Found {len(zones)} zones")
+            for zone in zones:
+                name = safe_get_attr(zone, 'name', '')
+                top = safe_get_attr(zone, 'top', None)
+                base = safe_get_attr(zone, 'base', None)
+                
+                # Store zone data in remarks
+                zones_data['remarks'].append(f"Zone_{name}: top={top}, base={base}")
+                
+    except Exception as e:
+        logger.debug(f"Error extracting zones: {e}")
+    
+    return zones_data
+
 def extract_origin_info(logical_file, logger):
     """Extract origin information from logical file."""
     origin_info = {
@@ -123,22 +312,61 @@ def extract_origin_info(logical_file, logger):
     
     return origin_info
 
-def extract_tool_info(channel, logger):
-    """Extract tool information from channel."""
+def extract_enhanced_tool_info(channel, logger):
+    """Extract enhanced tool information from channel including curve metadata."""
     tool_info = {
         'tool_type': "",
         'processing_software': "",
+        'curve_units': "",
+        'curve_description': "",
+        'curve_type': "",
         'remarks': ""
     }
     
     try:
-        # Get tool information from channel
+        # Get basic tool information from channel
         tool_info['tool_type'] = safe_get_attr(channel, 'type', "") or ""
         tool_info['processing_software'] = safe_get_attr(channel, 'software', "") or ""
         tool_info['remarks'] = safe_get_attr(channel, 'long_name', "") or ""
         
+        # Extract curve-level metadata
+        tool_info['curve_units'] = safe_get_attr(channel, 'units', "") or ""
+        
+        # Try alternative access for units
+        if not tool_info['curve_units']:
+            try:
+                attributes = channel.attributes
+                if attributes and 'UNIT' in attributes:
+                    tool_info['curve_units'] = attributes['UNIT']
+            except:
+                pass
+        
+        # Get curve description
+        tool_info['curve_description'] = safe_get_attr(channel, 'long_name', "") or ""
+        
+        # Try alternative access for description
+        if not tool_info['curve_description']:
+            try:
+                attributes = channel.attributes
+                if attributes and 'DESCR' in attributes:
+                    tool_info['curve_description'] = attributes['DESCR']
+            except:
+                pass
+        
+        # Get curve type
+        tool_info['curve_type'] = safe_get_attr(channel, 'type', "") or ""
+        
+        # Try alternative access for type
+        if not tool_info['curve_type']:
+            try:
+                properties = channel.properties
+                if properties and 'type' in properties:
+                    tool_info['curve_type'] = properties['type']
+            except:
+                pass
+        
     except Exception as e:
-        logger.debug(f"Error extracting tool info: {e}")
+        logger.debug(f"Error extracting enhanced tool info: {e}")
     
     return tool_info
 
@@ -185,44 +413,31 @@ def extract_geographic_info(logical_file, logger):
         # Try to get geographic info from parameters
         try:
             parameters = logical_file.parameters
-            logger.debug(f"Found {len(parameters)} parameters")
-            for param in parameters:
-                param_name = safe_get_attr(param, 'name', '').upper()
-                param_values = safe_get_attr(param, 'values', [])
-                logger.debug(f"Parameter {param_name}: values = {param_values}")
-                
-                # Get the first value from the list
-                param_value = param_values[0] if param_values else ""
-                
-                if param_name in ['LATI', 'LAT', 'LATITUDE'] and param_value:
-                    # Convert DMS to decimal degrees
-                    decimal_lat = dms_to_decimal(param_value)
-                    if decimal_lat is not None:
-                        geo_info['latitude'] = decimal_lat
-                elif param_name in ['LONG', 'LON', 'LONGITUDE'] and param_value:
-                    # Convert DMS to decimal degrees
-                    decimal_lon = dms_to_decimal(param_value)
-                    if decimal_lon is not None:
-                        geo_info['longitude'] = decimal_lon
-                elif param_name in ['ELEV', 'ELEVATION', 'KB', 'EDF', 'EGL', 'ELZ'] and param_value:
-                    # Use EDF (Elevation DF) as primary elevation, fallback to others
-                    if param_name == 'EDF' or geo_info['elevation'] is None:
+            
+            if parameters:
+                for param in parameters:
+                    param_name = safe_get_attr(param, 'mnemonic', '').upper()
+                    param_value = safe_get_attr(param, 'value', '')
+                    
+                    # Map geographic parameters
+                    if param_name == 'CTRY' and not geo_info['country']:
+                        geo_info['country'] = param_value
+                    elif param_name == 'STAT' and not geo_info['state_province']:
+                        geo_info['state_province'] = param_value
+                    elif param_name == 'FLD' and not geo_info['field_name']:
+                        geo_info['field_name'] = param_value
+                    elif param_name == 'LATI':
+                        geo_info['latitude'] = dms_to_decimal(param_value)
+                    elif param_name == 'LONG':
+                        geo_info['longitude'] = dms_to_decimal(param_value)
+                    elif param_name == 'ELEV' or param_name == 'ELZ':
                         try:
                             geo_info['elevation'] = float(param_value)
-                        except:
+                        except (ValueError, TypeError):
                             pass
-                elif param_name in ['CTRY', 'COUNTRY'] and param_value:
-                    geo_info['country'] = str(param_value)
-                elif param_name in ['COUN'] and param_value:
-                    # COUN parameter contains rig/company name
-                    geo_info['service_company'] = str(param_value)
-                elif param_name in ['STATE', 'PROVINCE'] and param_value:
-                    geo_info['state_province'] = str(param_value)
-                elif param_name in ['FIELD', 'FIELD_NAME', 'FN'] and param_value:
-                    geo_info['field_name'] = str(param_value)
-                elif param_name in ['BLOCK', 'BLOCK_NAME'] and param_value:
-                    geo_info['block_name'] = str(param_value)
-                    
+                    elif param_name == 'COUN' and not geo_info['service_company']:
+                        geo_info['service_company'] = param_value
+                        
         except Exception as e:
             logger.debug(f"Error extracting geographic info from parameters: {e}")
             
@@ -232,204 +447,200 @@ def extract_geographic_info(logical_file, logger):
     return geo_info
 
 def find_depth_channel(channels, logger):
-    """Find the depth channel from available channels."""
-    depth_ch = None
+    """Find the depth channel from a list of channels."""
+    depth_keywords = ['DEPTH', 'MD', 'TVD', 'TVDSS', 'TVDKB']
     
-    # Common depth channel names
-    depth_names = ['DEPTH', 'MD', 'TVD', 'TVDSS', 'KB', 'DEPT', 'DEPTH_MD', 'DEPTH_TVD']
+    for channel in channels:
+        channel_name = safe_get_attr(channel, 'name', '').upper()
+        
+        for keyword in depth_keywords:
+            if keyword in channel_name:
+                logger.debug(f"Found depth channel: {channel_name}")
+                return channel
     
-    for ch in channels:
-        ch_name = safe_get_attr(ch, 'name', '').upper()
-        if ch_name in depth_names:
-            depth_ch = ch
-            logger.debug(f"Found depth channel: {ch_name}")
-            break
-    
-    # If no exact match, try partial matches
-    if not depth_ch:
-        for ch in channels:
-            ch_name = safe_get_attr(ch, 'name', '').upper()
-            if any(depth_word in ch_name for depth_word in ['DEPTH', 'MD', 'TVD', 'KB']):
-                depth_ch = ch
-                logger.debug(f"Using {ch_name} as depth channel")
-                break
-    
-    return depth_ch
+    return None
 
 def compute_statistics(values):
-    """Compute statistics for a list of values."""
+    """Compute basic statistics for a list of values."""
     if not values:
-        return None, None, None, None, 0
+        return {
+            'mean': None,
+            'min': None,
+            'max': None,
+            'count': 0,
+            'stddev': None
+        }
     
-    arr = np.array(values, dtype=float)
-    n = arr.size
-    
-    if n == 0:
-        return None, None, None, None, 0
-    
-    # Compute stats (handle NaN values)
-    mean = float(np.nanmean(arr)) if n else None
-    mn = float(np.nanmin(arr)) if n else None
-    mx = float(np.nanmax(arr)) if n else None
-    std = float(np.nanstd(arr)) if n else None
-    
-    return mean, mn, mx, std, n
+    try:
+        values_array = np.array(values)
+        return {
+            'mean': float(np.mean(values_array)),
+            'min': float(np.min(values_array)),
+            'max': float(np.max(values_array)),
+            'count': len(values_array),
+            'stddev': float(np.std(values_array))
+        }
+    except Exception:
+        return {
+            'mean': None,
+            'min': None,
+            'max': None,
+            'count': 0,
+            'stddev': None
+        }
 
 def map_channel_to_canonical(channel_name, values, depth_values, origin_info, tool_info, 
-                            geo_info, file_info, logger):
-    """Map channel data to canonical schema."""
-    
-    # Compute statistics
-    mean, mn, mx, std, n = compute_statistics(values)
-    
-    if n == 0:
-        logger.debug(f"No valid data for channel {channel_name}")
-        return None
-    
-    # Calculate depth range
-    depth_start = depth_values[0] if depth_values else None
-    depth_end = depth_values[-1] if depth_values else None
-    sample_interval = (depth_values[1] - depth_values[0]) if len(depth_values) > 1 else None
-    
-    # Build canonical record
+                            geo_info, file_metadata, comp_params, calib_equip, zones_data, file_info, logger):
+    """Map DLIS channel data to canonical schema with enhanced metadata."""
     rec = {field: "" for field in CANONICAL_FIELDS}
     
     # Set hard-coded defaults for fields with no extraction logic
     rec.update({
         "facies_code": "UNKNOWN",
-        "horizon_name": "UNKNOWN"
+        "horizon_name": "UNKNOWN",
+        "gas_oil_ratio": 0.0,
+        "production_rate": 0.0
     })
     
+    # Basic well information
     rec.update({
         "well_id": origin_info['well_name'],
-        "file_origin": file_info['filename'],
-        "record_type": "logging",
-        "curve_name": channel_name,
-        "depth_start": depth_start,
-        "depth_end": depth_end,
-        "sample_interval": sample_interval,
-        "num_samples": n,
-        "sample_mean": mean,
-        "sample_min": mn,
-        "sample_max": mx,
-        "sample_stddev": std,
-        "service_company": origin_info['service_company'],
-        "processing_software": tool_info['processing_software'],
-        "acquisition_date": origin_info['acquisition_date'],
-        "processing_date": file_info['processing_date'],
-        "file_checksum": file_info['checksum'],
-        "version": origin_info['version'],
-        "tool_type": tool_info['tool_type'],
-        "analyst": origin_info['analyst'],
-        "remarks": tool_info['remarks'],
-        "null_count": len([v for v in values if v is None or np.isnan(v) or v <= -999.0]),
-        # Geographic fields
+        "field_name": geo_info['field_name'],
         "country": geo_info['country'],
         "state_province": geo_info['state_province'],
-        "field_name": geo_info['field_name'],
-        "block_name": geo_info['block_name'],
-        "latitude": geo_info['latitude'],
-        "longitude": geo_info['longitude'],
-        "elevation": geo_info['elevation'],
-        "service_company": geo_info.get('service_company', "")
+        "service_company": geo_info['service_company'],
+        "api_number": "",
+        "uwi": "",
+        "location": "",
+        "acquisition_date": origin_info['acquisition_date'],
+        "record_type": "logging",
+        "curve_name": channel_name,
+        "file_origin": file_info['filename'],
+        "depth_start": depth_values[0] if depth_values else None,
+        "depth_end": depth_values[-1] if depth_values else None,
+        "step_size": None,
+        "tool_type": "CHANNEL"
     })
     
-    # Map specific channel types to canonical fields
-    channel_upper = channel_name.upper()
+    # Geographic data
+    if geo_info['latitude'] is not None:
+        rec['latitude'] = geo_info['latitude']
+    else:
+        rec['latitude'] = 0.0
+    
+    if geo_info['longitude'] is not None:
+        rec['longitude'] = geo_info['longitude']
+    else:
+        rec['longitude'] = 0.0
+    
+    if geo_info['elevation'] is not None:
+        rec['elevation'] = geo_info['elevation']
+    
+    # File metadata
+    if file_metadata['job_id']:
+        rec['remarks'] = f"Job ID: {file_metadata['job_id']}; "
+    if file_metadata['client_name']:
+        rec['remarks'] += f"Client: {file_metadata['client_name']}; "
+    if file_metadata['formation']:
+        rec['remarks'] += f"Formation: {file_metadata['formation']}; "
+    if file_metadata['log_date']:
+        rec['remarks'] += f"Log Date: {file_metadata['log_date']}; "
+    if file_metadata['software']:
+        rec['remarks'] += f"Software: {file_metadata['software']}; "
+    if file_metadata['comments']:
+        rec['remarks'] += f"Comments: {file_metadata['comments']}; "
+    
+    # Computations and parameters
+    if comp_params['archie_a'] is not None:
+        rec['archie_a'] = comp_params['archie_a']
+    if comp_params['archie_m'] is not None:
+        rec['archie_m'] = comp_params['archie_m']
+    if comp_params['archie_n'] is not None:
+        rec['archie_n'] = comp_params['archie_n']
+    if comp_params['water_resistivity'] is not None:
+        rec['water_resistivity'] = comp_params['water_resistivity']
+    
+    # Add computation remarks
+    if comp_params['remarks']:
+        rec['remarks'] += f"Computation Params: {'; '.join(comp_params['remarks'])}; "
+    
+    # Calibrations and equipment
+    if calib_equip['remarks']:
+        rec['remarks'] += f"Calibration/Equipment: {'; '.join(calib_equip['remarks'])}; "
+    
+    # Zones
+    if zones_data['remarks']:
+        rec['remarks'] += f"Zones: {'; '.join(zones_data['remarks'])}; "
+    
+    # Curve metadata
+    if tool_info['curve_units']:
+        rec['remarks'] += f"Curve Units: {tool_info['curve_units']}; "
+    if tool_info['curve_description']:
+        rec['remarks'] += f"Curve Description: {tool_info['curve_description']}; "
+    if tool_info['curve_type']:
+        rec['remarks'] += f"Curve Type: {tool_info['curve_type']}; "
+    
+    # Compute statistics
+    stats = compute_statistics(values)
+    
+    # Map curve data based on curve name
+    curve_upper = channel_name.upper()
+    mean = stats['mean']
     
     # Petrophysical properties
-    if 'POROSITY' in channel_upper:
-        rec['porosity'] = mean
-    elif 'WATER_SAT' in channel_upper or 'SW' in channel_upper:
+    if 'BVW' in curve_upper:
+        rec['bulk_volume_water'] = mean
+    elif 'SW' in curve_upper:
         rec['water_saturation'] = mean
-    elif 'PERMEABILITY' in channel_upper or 'PERM' in channel_upper:
-        rec['permeability'] = mean
-    elif 'VSHALE' in channel_upper or 'VSH' in channel_upper:
-        rec['vshale'] = mean
-    elif 'CLAY' in channel_upper:
-        rec['clay_volume'] = mean
-    elif 'BULK_VOL_WATER' in channel_upper:
-        rec['bulk_vol_water'] = mean
-    
-    # Resistivity measurements
-    elif 'RESISTIVITY' in channel_upper:
-        if 'DEEP' in channel_upper:
-            rec['resistivity_deep'] = mean
-        elif 'MEDIUM' in channel_upper or 'MED' in channel_upper:
-            rec['resistivity_medium'] = mean
-        elif 'SHALLOW' in channel_upper or 'SHA' in channel_upper:
-            rec['resistivity_shallow'] = mean
-        else:
-            rec['resistivity_deep'] = mean  # Default to deep
-    
-    # Drilling parameters
-    elif 'ROP' in channel_upper:
-        rec['rop'] = mean
-    elif 'WOB' in channel_upper or 'WEIGHT_ON_BIT' in channel_upper:
-        rec['weight_on_bit'] = mean
-    elif 'TORQUE' in channel_upper:
-        rec['torque'] = mean
-    elif 'PUMP_PRESSURE' in channel_upper:
-        rec['pump_pressure'] = mean
-    
-    # Mud properties
-    elif 'MUD_FLOW' in channel_upper:
-        rec['mud_flow_rate'] = mean
-    elif 'MUD_VISCOSITY' in channel_upper:
-        rec['mud_viscosity'] = mean
-    elif 'MUD_WEIGHT' in channel_upper:
-        rec['mud_weight_actual'] = mean
-    
-    # Logging measurements
-    elif 'CALIPER' in channel_upper:
-        rec['caliper'] = mean
-    elif 'SP' in channel_upper or 'SPONTANEOUS' in channel_upper:
-        rec['sp_curves'] = mean
-    
-    # Acoustic properties
-    elif 'VP' in channel_upper or 'P_WAVE' in channel_upper:
-        rec['vp'] = mean
-    elif 'VS' in channel_upper or 'S_WAVE' in channel_upper:
-        rec['vs'] = mean
-    
-    # Formation conditions
-    elif 'FORMATION_TEMP' in channel_upper or 'TEMP' in channel_upper:
-        rec['formation_temp'] = mean
-    elif 'FORMATION_PRESS' in channel_upper or 'PRESSURE' in channel_upper:
-        rec['formation_press'] = mean
-    
-    # Archie parameters
-    elif 'ARCHIE_A' in channel_upper:
-        rec['archie_a'] = mean
-    elif 'ARCHIE_M' in channel_upper:
-        rec['archie_m'] = mean
-    elif 'ARCHIE_N' in channel_upper:
-        rec['archie_n'] = mean
-    elif 'WATER_RESISTIVITY' in channel_upper or 'RW' in channel_upper:
+    elif 'PHIF' in curve_upper or 'PHIT' in curve_upper:
+        rec['porosity'] = mean
+    elif 'RT' in curve_upper or 'RESISTIVITY' in curve_upper:
+        rec['resistivity_deep'] = mean
+    elif 'RW' in curve_upper:
         rec['water_resistivity'] = mean
+    elif 'RHOB' in curve_upper:
+        rec['density'] = mean
+    elif 'NPHI' in curve_upper:
+        rec['neutron_porosity'] = mean
+    elif 'GR' in curve_upper or 'GAMMA' in curve_upper:
+        rec['gamma_ray'] = mean
+    elif 'DT' in curve_upper or 'SONIC' in curve_upper:
+        rec['sonic_transit_time'] = mean
+    elif 'CALI' in curve_upper:
+        rec['caliper'] = mean
+    elif 'PEF' in curve_upper:
+        rec['photoelectric_factor'] = mean
+    elif 'DTS' in curve_upper:
+        rec['shear_sonic'] = mean
+    elif 'VSH' in curve_upper:
+        rec['shale_volume'] = mean
+    elif 'SAND_FLAG' in curve_upper:
+        rec['sand_flag'] = mean
+    elif 'CARB_FLAG' in curve_upper:
+        rec['carbonate_flag'] = mean
+    elif 'COAL_FLAG' in curve_upper:
+        rec['coal_flag'] = mean
+    elif 'KLOGH' in curve_upper:
+        rec['permeability'] = mean
     
-    # Production data
-    elif 'PRODUCTION_RATE' in channel_upper:
-        rec['production_rate'] = mean
-    elif 'GAS_OIL_RATIO' in channel_upper or 'GOR' in channel_upper:
-        rec['gas_oil_ratio'] = mean
-    
-    # Set conditional defaults for fields with extraction logic
-    if not rec.get('production_rate'):
-        rec['production_rate'] = 0.0
-    if not rec.get('gas_oil_ratio'):
-        rec['gas_oil_ratio'] = 0.0
-    if not rec.get('latitude') or rec.get('latitude') is None:
-        rec['latitude'] = 0.0
-    if not rec.get('longitude') or rec.get('longitude') is None:
-        rec['longitude'] = 0.0
+    # Map curve statistics to canonical fields
+    if stats['mean'] is not None:
+        rec['sample_mean'] = stats['mean']
+    if stats['min'] is not None:
+        rec['sample_min'] = stats['min']
+    if stats['max'] is not None:
+        rec['sample_max'] = stats['max']
+    if stats['count'] is not None:
+        rec['num_samples'] = stats['count']
+    if stats['stddev'] is not None:
+        rec['sample_stddev'] = stats['stddev']
     
     return rec
 
 def parse_dlis(file_path: str, logger: logging.Logger) -> list[dict]:
     """
     Comprehensive DLIS parser: extract all available data from DLIS files
-    and map to the 75-field canonical schema.
+    and map to the 75-field canonical schema with enhanced metadata extraction.
     """
     logger.info(f"Starting to parse DLIS file: {file_path}")
     
@@ -448,13 +659,24 @@ def parse_dlis(file_path: str, logger: logging.Logger) -> list[dict]:
             for lf_idx, lf in enumerate(logical_files):
                 logger.info(f"Processing logical file {lf_idx + 1}")
                 
-                # Extract origin information
+                # Extract comprehensive metadata
                 origin_info = extract_origin_info(lf, logger)
                 logger.debug(f"Origin info: {origin_info}")
                 
-                # Extract geographic information
                 geo_info = extract_geographic_info(lf, logger)
                 logger.debug(f"Geographic info: {geo_info}")
+                
+                file_metadata = extract_file_metadata(lf, logger)
+                logger.debug(f"File metadata: {file_metadata}")
+                
+                comp_params = extract_computations_and_parameters(lf, logger)
+                logger.debug(f"Computation parameters: {comp_params}")
+                
+                calib_equip = extract_calibrations_and_equipment(lf, logger)
+                logger.debug(f"Calibrations and equipment: {calib_equip}")
+                
+                zones_data = extract_zones(lf, logger)
+                logger.debug(f"Zones data: {zones_data}")
                 
                 # Process each frame
                 frames = lf.frames
@@ -498,13 +720,14 @@ def parse_dlis(file_path: str, logger: logging.Logger) -> list[dict]:
                                 logger.debug(f"No values found for channel {ch_name}")
                                 continue
                             
-                            # Extract tool information
-                            tool_info = extract_tool_info(ch, logger)
+                            # Extract enhanced tool information
+                            tool_info = extract_enhanced_tool_info(ch, logger)
                             
-                            # Map to canonical schema
+                            # Map to canonical schema with enhanced metadata
                             rec = map_channel_to_canonical(
                                 ch_name, values, depth_values, origin_info, 
-                                tool_info, geo_info, file_info, logger
+                                tool_info, geo_info, file_metadata, comp_params, 
+                                calib_equip, zones_data, file_info, logger
                             )
                             
                             if rec:
