@@ -14,3 +14,6 @@ structlog
 
 # LAS file parsing
 lasio
+
+# Astra DB Data API client
+astrapy
