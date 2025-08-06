@@ -628,7 +628,7 @@ def map_channel_to_canonical(channel_name, values, depth_values, origin_info, to
     
     # Petrophysical properties
     if 'BVW' in curve_upper:
-        rec['bulk_volume_water'] = mean
+        rec['bulk_vol_water'] = mean
     elif 'SW' in curve_upper:
         rec['water_saturation'] = mean
     elif 'PHIF' in curve_upper or 'PHIT' in curve_upper:

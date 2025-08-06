@@ -359,7 +359,7 @@ def map_curve_to_canonical(curve_name, curve_data, well_info, param_info, versio
     
     # Petrophysical properties
     if 'BVW' in curve_upper:
-        rec['bulk_volume_water'] = mean
+        rec['bulk_vol_water'] = mean
     elif 'SW' in curve_upper:
         rec['water_saturation'] = mean
     elif 'PHIF' in curve_upper or 'PHIT' in curve_upper:
