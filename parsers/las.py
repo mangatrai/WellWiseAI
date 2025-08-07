@@ -375,7 +375,10 @@ def map_curve_to_canonical(curve_name, curve_data, well_info, param_info, versio
     elif 'GR' in curve_upper or 'GAMMA' in curve_upper:
         rec['gamma_ray'] = mean
     elif 'DT' in curve_upper or 'SONIC' in curve_upper:
-        rec['sonic_transit_time'] = mean
+        # Add to remarks since sonic_transit_time is not in canonical schema
+        if 'remarks' not in rec:
+            rec['remarks'] = ""
+        rec['remarks'] += f"sonic_transit_time: {mean}; "
     elif 'CALI' in curve_upper:
         rec['caliper'] = mean
     elif 'PEF' in curve_upper:
