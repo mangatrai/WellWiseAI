@@ -377,7 +377,10 @@ def map_curve_to_canonical(curve_name, curve_data, well_info, param_info, versio
     elif 'NPHI' in curve_upper:
         rec['neutron_porosity'] = mean
     elif 'GR' in curve_upper or 'GAMMA' in curve_upper:
-        rec['gamma_ray'] = mean
+                        # Add gamma_ray to remarks instead of separate field
+                if 'remarks' not in rec:
+                    rec['remarks'] = ""
+                rec['remarks'] += f"gamma_ray: {mean}; "
     elif 'DT' in curve_upper or 'SONIC' in curve_upper:
         # Add to remarks since sonic_transit_time is not in canonical schema
         if 'remarks' not in rec:
@@ -390,13 +393,16 @@ def map_curve_to_canonical(curve_name, curve_data, well_info, param_info, versio
     elif 'DTS' in curve_upper:
         rec['shear_sonic'] = mean
     elif 'VSH' in curve_upper:
-        rec['shale_volume'] = mean
+        rec['vshale'] = mean
     elif 'SAND_FLAG' in curve_upper:
-        rec['sand_flag'] = mean
+        rec['sample_mean'] = mean
+        rec['sand_flag'] = mean > 0.0 if not np.isnan(mean) else False
     elif 'CARB_FLAG' in curve_upper:
-        rec['carbonate_flag'] = mean
+        rec['sample_mean'] = mean
+        rec['carbonate_flag'] = mean > 0.0 if not np.isnan(mean) else False
     elif 'COAL_FLAG' in curve_upper:
-        rec['coal_flag'] = mean
+        rec['sample_mean'] = mean
+        rec['coal_flag'] = mean > 0.0 if not np.isnan(mean) else False
     elif 'KLOGH' in curve_upper:
         rec['permeability'] = mean
     

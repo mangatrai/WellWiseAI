@@ -20,24 +20,13 @@ logger = logging.getLogger(__name__)
 class WellWisePipeline:
     """Complete pipeline for parsing and inserting oil and gas data."""
     
-    def __init__(self, application_token: str = None, api_endpoint: str = None):
+    def __init__(self):
         """
         Initialize the pipeline.
-        
-        Args:
-            application_token: Astra DB application token (optional, will use env var)
-            api_endpoint: Astra DB API endpoint (optional, will use env var)
         """
-        self.application_token = application_token or os.getenv('ASTRA_DB_APPLICATION_TOKEN')
-        self.api_endpoint = api_endpoint or os.getenv('ASTRA_DB_API_ENDPOINT')
-        
-        if self.application_token and self.api_endpoint:
-            self.inserter = WellWiseDBInserter(self.application_token, self.api_endpoint)
-            self.db_available = True
-        else:
-            self.inserter = None
-            self.db_available = False
-            logger.warning("Database credentials not available. Only parsing will be performed.")
+        # Initialize inserter - it will handle its own credentials
+        self.inserter = WellWiseDBInserter()
+        self.db_available = self.inserter.is_available()
     
     def run_parsing(self) -> bool:
         """
@@ -193,17 +182,8 @@ class WellWisePipeline:
 def main():
     """Main function to run the complete pipeline."""
     
-    # Check if we have database credentials
-    application_token = os.getenv('ASTRA_DB_APPLICATION_TOKEN')
-    api_endpoint = os.getenv('ASTRA_DB_API_ENDPOINT')
-    
-    if not application_token or not api_endpoint:
-        logger.warning("⚠️  Database credentials not found in environment variables")
-        logger.warning("   Set ASTRA_DB_APPLICATION_TOKEN and ASTRA_DB_API_ENDPOINT")
-        logger.warning("   Only parsing will be performed")
-    
-    # Initialize pipeline
-    pipeline = WellWisePipeline(application_token, api_endpoint)
+    # Initialize pipeline - inserter will handle its own credentials
+    pipeline = WellWisePipeline()
     
     # Check command line arguments
     skip_parsing = '--skip-parsing' in sys.argv

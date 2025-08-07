@@ -18,27 +18,35 @@ logger = logging.getLogger(__name__)
 class WellWiseDBInserter:
     """Database inserter for WellWiseAI using Astra DB Data API."""
     
-    def __init__(self, application_token: str, api_endpoint: str, keyspace_name: str = "wellwise", table_name: str = "petro_data"):
+    def __init__(self, keyspace_name: str = "wellwise", table_name: str = "petro_data"):
         """
         Initialize the database inserter.
         
         Args:
-            application_token: Astra DB application token
-            api_endpoint: Astra DB API endpoint
             keyspace_name: Database keyspace name
             table_name: Table name for petro data
         """
-        self.application_token = application_token
-        self.api_endpoint = api_endpoint
-        self.keyspace_name = keyspace_name
-        self.table_name = table_name
+        # Get credentials from environment
+        self.application_token = os.getenv('ASTRA_DB_TOKEN')
+        self.api_endpoint = os.getenv('ASTRA_DB_API_ENDPOINT')
+        self.keyspace_name = os.getenv('ASTRA_DB_KEYSPACE')
+        self.table_name = os.getenv('ASTRA_TABLE_NAME')
         
-        # Initialize Astra DB client
-        self.client = DataAPIClient(application_token)
-        self.database = self.client.get_database(api_endpoint)
-        self.table = self.database.get_table(table_name)
-        
-        logger.info(f"Initialized database connection to {keyspace_name}.{table_name}")
+        # Initialize Astra DB client if credentials are available
+        if self.application_token and self.api_endpoint:
+            self.client = DataAPIClient(self.application_token)
+            self.database = self.client.get_database(self.api_endpoint)
+            self.table = self.database.get_table(table_name)
+            logger.info(f"Initialized database connection to {keyspace_name}.{table_name}")
+        else:
+            self.client = None
+            self.database = None
+            self.table = None
+            logger.warning("Database credentials not available. Database operations will be skipped.")
+    
+    def is_available(self) -> bool:
+        """Check if database is available."""
+        return self.application_token is not None and self.api_endpoint is not None
     
     def convert_data_types(self, record: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -54,33 +62,17 @@ class WellWiseDBInserter:
         
         for key, value in record.items():
             if value is None or value == "":
-                # Skip null/empty values
+                # Skip null/empty values for ALL fields
                 continue
                 
             if key in ['acquisition_date', 'processing_date'] and value:
-                # Convert date strings to DataAPIDate
-                try:
-                    if isinstance(value, str):
-                        # Handle different date formats
-                        if 'T' in value:
-                            # ISO format: "2009-08-25T10:08:24.199000"
-                            date_str = value.split('T')[0]
-                        else:
-                            # Simple date format
-                            date_str = value
-                        converted_record[key] = DataAPIDate.from_string(date_str)
-                    else:
-                        converted_record[key] = value
-                except Exception as e:
-                    logger.warning(f"Could not convert date {key}: {value}, error: {e}")
-                    converted_record[key] = value
+                # Skip problematic date fields for now
+                logger.debug(f"Skipping date field {key}: {value}")
+                continue
             
             elif key in ['remarks'] and value:
-                # Truncate remarks if too long (Astra DB has limits)
-                if len(str(value)) > 1000:
-                    converted_record[key] = str(value)[:1000] + "..."
-                else:
-                    converted_record[key] = str(value)
+                # Remarks field - convert to string
+                converted_record[key] = str(value)
             
             elif isinstance(value, (int, float)) and not isinstance(value, bool):
                 # Numeric values
@@ -89,6 +81,28 @@ class WellWiseDBInserter:
             elif isinstance(value, str):
                 # String values
                 converted_record[key] = str(value)
+            
+            elif key in ['carbonate_flag', 'coal_flag', 'sand_flag', 'qc_flag']:
+                # Convert string boolean values to actual booleans
+                logger.debug(f"Processing boolean field {key}: {repr(value)}")
+                try:
+                    if isinstance(value, str):
+                        if value.lower() in ['true', '1', 'yes', 'on']:
+                            converted_record[key] = True
+                            logger.debug(f"Set {key} to True")
+                        elif value.lower() in ['false', '0', 'no', 'off']:
+                            converted_record[key] = False
+                            logger.debug(f"Set {key} to False")
+                        else:
+                            # Skip unknown boolean values
+                            logger.debug(f"Skipping unknown boolean value for {key}: {value}")
+                            continue
+                    else:
+                        converted_record[key] = bool(value)
+                        logger.debug(f"Set {key} to {bool(value)}")
+                except Exception as e:
+                    logger.warning(f"Could not convert boolean {key}: {value}, error: {e}")
+                    continue
             
             elif isinstance(value, bool):
                 # Boolean values
@@ -129,6 +143,10 @@ class WellWiseDBInserter:
         Returns:
             True if successful, False otherwise
         """
+        if not self.is_available():
+            logger.warning("Database not available. Skipping record insertion.")
+            return False
+            
         try:
             # Validate primary key
             if not self.validate_primary_key(record):
@@ -158,6 +176,10 @@ class WellWiseDBInserter:
         Returns:
             Dictionary with success/failure counts
         """
+        if not self.is_available():
+            logger.warning("Database not available. Skipping batch insertion.")
+            return {'successful': 0, 'failed': len(records), 'total': len(records)}
+            
         total_records = len(records)
         successful_inserts = 0
         failed_inserts = 0
@@ -276,16 +298,8 @@ class WellWiseDBInserter:
 def main():
     """Main function to demonstrate database insertion."""
     
-    # Get credentials from environment variables
-    application_token = os.getenv('ASTRA_DB_APPLICATION_TOKEN')
-    api_endpoint = os.getenv('ASTRA_DB_API_ENDPOINT')
-    
-    if not application_token or not api_endpoint:
-        logger.error("Please set ASTRA_DB_APPLICATION_TOKEN and ASTRA_DB_API_ENDPOINT environment variables")
-        return
-    
     # Initialize inserter
-    inserter = WellWiseDBInserter(application_token, api_endpoint)
+    inserter = WellWiseDBInserter()
     
     # Insert all data from parsed_data directory
     result = inserter.insert_from_parsed_data_directory()
