@@ -304,18 +304,22 @@ def map_curve_to_canonical(curve_name, curve_data, well_info, param_info, versio
         "country": well_info['country'],
         "state_province": well_info['state_province'],
         "service_company": well_info['service_company'],
-        "api_number": well_info['api_number'],
-        "uwi": well_info['uwi'],
-        "location": well_info['location'],
         "acquisition_date": well_info['acquisition_date'],
         "record_type": "LAS_LOG",
         "curve_name": curve_name,
         "file_origin": file_info['file_path'],
         "depth_start": well_info['start_depth'],
         "depth_end": well_info['stop_depth'],
-        "step_size": well_info['step_size'],
         "tool_type": "LAS_LOG"
     })
+    
+    # Add non-canonical fields to remarks
+    if 'remarks' not in rec:
+        rec['remarks'] = ""
+    rec['remarks'] += f"api_number: {well_info['api_number'] or '(not found)'}; "
+    rec['remarks'] += f"uwi: {well_info['uwi'] or '(not found)'}; "
+    rec['remarks'] += f"location: {well_info['location'] or '(not found)'}; "
+    rec['remarks'] += f"step_size: {well_info['step_size'] or '(not found)'}; "
     
     # Geographic data
     if well_info['latitude'] is not None:
@@ -435,9 +439,11 @@ def map_curve_to_canonical(curve_name, curve_data, well_info, param_info, versio
     if curve_data.get('api_code'):
         remarks_parts.append(f"API Code: {curve_data['api_code']}")
     
-    # Combine all remarks
+    # Combine all remarks, preserving existing non-canonical fields
     if remarks_parts:
-        rec['remarks'] = "; ".join(remarks_parts)
+        existing_remarks = rec.get('remarks', '')
+        new_remarks = "; ".join(remarks_parts)
+        rec['remarks'] = existing_remarks + new_remarks if existing_remarks else new_remarks
     
     # Set conditional defaults for fields with extraction logic
     if not rec.get('production_rate'):

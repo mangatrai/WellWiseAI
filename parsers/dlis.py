@@ -548,18 +548,22 @@ def map_channel_to_canonical(channel_name, values, depth_values, origin_info, to
         "country": geo_info['country'],
         "state_province": geo_info['state_province'],
         "service_company": geo_info['service_company'],
-        "api_number": "",
-        "uwi": "",
-        "location": "",
         "acquisition_date": origin_info['acquisition_date'],
         "record_type": "logging",
         "curve_name": channel_name,
         "file_origin": file_info['filename'],
         "depth_start": depth_values[0] if depth_values else None,
         "depth_end": depth_values[-1] if depth_values else None,
-        "step_size": None,
         "tool_type": "CHANNEL"
     })
+    
+    # Add non-canonical fields to remarks (DLIS doesn't extract these values, so they remain empty)
+    if 'remarks' not in rec:
+        rec['remarks'] = ""
+    rec['remarks'] += "api_number: (not extracted from DLIS); "
+    rec['remarks'] += "uwi: (not extracted from DLIS); "
+    rec['remarks'] += "location: (not extracted from DLIS); "
+    rec['remarks'] += "step_size: (not extracted from DLIS); "
     
     # Geographic data
     if geo_info['latitude'] is not None:
