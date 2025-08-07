@@ -13,6 +13,9 @@ step_size - Step size (or "(not found)")
 2. Curve-specific data:
 gamma_ray - Gamma ray measurements (from GR/GAMMA curves)
 sonic_transit_time - Sonic transit time (from DT/SONIC curves)
+density - Bulk density measurements (from RHOB curves)
+neutron_porosity - Neutron porosity measurements (from NPHI curves)
+photoelectric_factor - Photoelectric factor measurements (from PEF curves)
 3. Metadata from well info:
 county - County information
 wrap - Wrap information
@@ -34,6 +37,9 @@ step_size - "(not extracted from DLIS)"
 2. Curve-specific data (same as LAS):
 gamma_ray - Gamma ray measurements (from GR/GAMMA curves)
 sonic_transit_time - Sonic transit time (from DT/SONIC curves)
+density - Bulk density measurements (from RHOB curves)
+neutron_porosity - Neutron porosity measurements (from NPHI curves)
+photoelectric_factor - Photoelectric factor measurements (from PEF curves)
 3. File metadata:
 job_id - Job ID
 client_name - Client name
@@ -54,5 +60,5 @@ curve_type - Curve type
 Summary:
 Both parsers map similar core fields to remarks, with DLIS having additional metadata fields due to the richer structure of DLIS files. The key non-canonical fields being moved to remarks are:
 api_number, uwi, location, step_size
-gamma_ray, sonic_transit_time
+gamma_ray, sonic_transit_time, density, neutron_porosity, photoelectric_factor
 Various metadata and parameter information

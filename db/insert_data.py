@@ -66,9 +66,36 @@ class WellWiseDBInserter:
                 continue
                 
             if key in ['acquisition_date', 'processing_date'] and value:
-                # Skip problematic date fields for now
-                logger.debug(f"Skipping date field {key}: {value}")
-                continue
+                # Convert timestamp fields to RFC 3339 format
+                try:
+                    if isinstance(value, str):
+                        # Handle different date formats
+                        if 'T' in value:
+                            # Already in ISO format, just ensure it's RFC 3339 compliant
+                            if value.endswith('Z'):
+                                # Already in UTC format
+                                converted_record[key] = value
+                            elif '+' in value or '-' in value[10:]:
+                                # Has timezone offset
+                                converted_record[key] = value
+                            else:
+                                # No timezone, assume UTC
+                                converted_record[key] = value + 'Z'
+                        else:
+                            # Simple date format, convert to RFC 3339
+                            # Try to parse as YYYY-MM-DD and add time
+                            if len(value) == 10 and value.count('-') == 2:
+                                converted_record[key] = value + 'T00:00:00Z'
+                            else:
+                                # Try to parse with datetime
+                                parsed_date = datetime.fromisoformat(value.replace('Z', '+00:00'))
+                                converted_record[key] = parsed_date.strftime('%Y-%m-%dT%H:%M:%SZ')
+                    else:
+                        logger.warning(f"Unexpected date type for {key}: {type(value)}")
+                        continue
+                except Exception as e:
+                    logger.warning(f"Could not convert date {key}: {value}, error: {e}")
+                    continue
             
             elif key in ['remarks'] and value:
                 # Remarks field - convert to string

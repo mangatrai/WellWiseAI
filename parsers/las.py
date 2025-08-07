@@ -373,9 +373,15 @@ def map_curve_to_canonical(curve_name, curve_data, well_info, param_info, versio
     elif 'RW' in curve_upper:
         rec['water_resistivity'] = mean
     elif 'RHOB' in curve_upper:
-        rec['density'] = mean
+        # Add density to remarks instead of separate field
+        if 'remarks' not in rec:
+            rec['remarks'] = ""
+        rec['remarks'] += f"density: {mean}; "
     elif 'NPHI' in curve_upper:
-        rec['neutron_porosity'] = mean
+        # Add neutron_porosity to remarks instead of separate field
+        if 'remarks' not in rec:
+            rec['remarks'] = ""
+        rec['remarks'] += f"neutron_porosity: {mean}; "
     elif 'GR' in curve_upper or 'GAMMA' in curve_upper:
                         # Add gamma_ray to remarks instead of separate field
                 if 'remarks' not in rec:
@@ -389,7 +395,10 @@ def map_curve_to_canonical(curve_name, curve_data, well_info, param_info, versio
     elif 'CALI' in curve_upper:
         rec['caliper'] = mean
     elif 'PEF' in curve_upper:
-        rec['photoelectric_factor'] = mean
+        # Add photoelectric_factor to remarks instead of separate field
+        if 'remarks' not in rec:
+            rec['remarks'] = ""
+        rec['remarks'] += f"photoelectric_factor: {mean}; "
     elif 'DTS' in curve_upper:
         rec['shear_sonic'] = mean
     elif 'VSH' in curve_upper:
