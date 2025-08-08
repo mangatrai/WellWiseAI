@@ -108,8 +108,10 @@ def parse_csv_file(csv_file_path: str, output_dir: str, records_per_file: int = 
     logger.info(f"Canonical mappings: {len(canonical_columns)}")
     logger.info(f"Remarks fields: {len(remarks_columns)}")
     
-    # Extract well_id from filename
-    well_id = extract_well_id_from_filename(csv_file_path)
+    # Extract well ID from first row's nameWellbore column
+    sample_row = df.iloc[0]
+    name_wellbore = sample_row.get('nameWellbore', None)
+    well_id = extract_well_id_from_nameWellbore(name_wellbore, csv_file_path)
     
     # Get current timestamp for processing_date
     processing_date = datetime.now().isoformat() + 'Z'
@@ -160,17 +162,25 @@ def parse_csv_file(csv_file_path: str, output_dir: str, records_per_file: int = 
     logger.info(f"Parsing complete. Generated {len(output_files)} files.")
     return output_files
 
-def extract_well_id_from_filename(file_path: str) -> str:
-    """Extract well ID from filename."""
-    filename = os.path.basename(file_path)
-    # Extract well identifier from filename
-    if '15_$47$_9-F-15A' in filename:
-        return 'volve_15_9_f_15a'
-    elif '15_9_F_15A' in filename:
-        return 'volve_15_9_f_15a'
-    else:
-        # Default fallback
-        return 'volve_well'
+def extract_well_id_from_nameWellbore(name_wellbore: str, file_path: str = None) -> str:
+    """
+    Extract well ID from nameWellbore column.
+    
+    Args:
+        name_wellbore: Value from nameWellbore column (e.g., "15/9-F-15A - Main Wellbore")
+        file_path: Fallback file path for filename-based extraction
+    
+    Returns:
+        Well ID in original format (e.g., "15/9-F-15A")
+    """
+    if name_wellbore and isinstance(name_wellbore, str):
+        # Split on " - " and take the first part
+        parts = name_wellbore.split(" - ")
+        if len(parts) > 0 and parts[0].strip():
+            return parts[0].strip()
+    
+    # Simple default if nameWellbore is not available
+    return 'well_id'
 
 def create_canonical_record(row: pd.Series, csv_to_canonical_map: Dict[str, Tuple[str, int]], 
                           remarks_columns: List[str], well_id: str, processing_date: str) -> Dict[str, Any]:
@@ -201,8 +211,19 @@ def create_canonical_record(row: pd.Series, csv_to_canonical_map: Dict[str, Tupl
         if csv_col in row and pd.notna(row[csv_col]):
             value = row[csv_col]
             
+            # Special handling for nameWellbore field
+            if csv_col == 'nameWellbore' and canonical_field == 'field_name':
+                # Extract the part after " - " for field_name
+                if value and isinstance(value, str) and " - " in value:
+                    parts = value.split(" - ")
+                    if len(parts) > 1:
+                        record[canonical_field] = parts[1].strip()
+                    else:
+                        record[canonical_field] = value
+                else:
+                    record[canonical_field] = value
             # Handle data type conversions
-            if canonical_field == 'depth_start':
+            elif canonical_field == 'depth_start':
                 try:
                     record['depth_start'] = float(value) if value is not None else None
                 except (ValueError, TypeError):
