@@ -62,3 +62,241 @@ Both parsers map similar core fields to remarks, with DLIS having additional met
 api_number, uwi, location, step_size
 gamma_ray, sonic_transit_time, density, neutron_porosity, photoelectric_factor
 Various metadata and parameter information
+
+CSV Parser (parsers/csv.py) - PLANNED:
+1. Direct Canonical Mappings (39 fields):
+depth_start - Measured Depth m
+plan_tvd - Hole Depth (TVD) m
+rop - Rate of Penetration m/h
+weight_on_bit - Weight on Bit kkgf
+torque - Average Surface Torque kN.m
+sample_mean - Total Downhole RPM rpm
+sample_stddev - Bit run number unitless
+sp_curves - ARC Gamma Ray (BH corrected) gAPI
+resistivity_deep - ARC Phase Shift Resistivity 40 inch at 2 MHz ohm.m
+resistivity_medium - ARC Phase Shift Resistivity 28 inch at 2 MHz ohm.m
+resistivity_shallow - ARC Attenuation Resistivity 28 inch at 2 MHz ohm.m
+mud_flow_rate - Mud Flow In L/min
+mud_weight_actual - Mud Density In g/cm3
+pump_pressure - Average Standpipe Pressure kPa
+formation_temp - Annular Temperature degC
+formation_press - ARC Annular Pressure kPa
+porosity - Density Porosity from ROBB_RT m3/m3
+caliper - Utrasonic Caliper, Average Diameter, Computed DH cm
+vshale - Bulk Density, Bottom, Computed DH g/cm3
+water_resistivity - ARC Phase Shift Resistivity 40 inch at 2 MHz ohm.m
+water_saturation - Density Porosity from ROBB_RT m3/m3
+gas_oil_ratio - Gas (avg) %
+production_rate - Mud Flow In L/min
+qc_flag - MWD Shock Risk unitless
+sample_interval - Total SPM 1/min
+num_samples - Pump Time h
+permeability - Corr. Drilling Exponent unitless
+field_name - nameWellbore
+service_company - name
+tool_type - Pass Name unitless
+file_origin - Bit run number unitless
+archie_a - ARC Phase Shift Resistivity 40 inch at 2 MHz ohm.m
+archie_m - ARC Phase Shift Resistivity 28 inch at 2 MHz ohm.m
+core_permeability - Corr. Drilling Exponent unitless
+seismic_sample_rate - MWD Vibration X-Axis ft/s2
+seismic_trace_count - MWD Vibration Lateral ft/s2
+vp - MWD Vibration Torsional kN.m
+country - nameWellbore
+state_province - name
+
+2. Fields Going to Remarks (145 fields):
+Drilling Parameters:
+- Average Surface Torque kN.m
+- Bit Drilling Run m
+- Bit Drilling Time h
+- Bit Depth m
+- Weight on Bit kkgf
+- Total Hookload kkgf
+- Average Hookload kkgf
+- Total Downhole RPM rpm
+- Average Rotary Speed rpm
+- Averaged RPM rpm
+- MWD Turbine RPM rpm
+- MWD Collar RPM rpm
+- Rate of Penetration (5ft avg) m/h
+- Rate of penetration m/h
+- Inverse ROP s/m
+- Averaged WOB kkgf
+- Bit Revolutions (cum) unitless
+- Bit Drill Time h
+- Weight On Hook kkgf
+- HKLI kkgf
+- HKLO kkgf
+- String weight (rot, avg) kkgf
+- Extrapolated Hole TVD m
+- Lag Depth (TVD) m
+- Total Vertical Depth m
+- Hole depth (MD) m
+
+Shock and Vibration Data:
+- CRS Stick-Slip Frequency unitless
+- PowerUP Shock Rate 1/s
+- CRS Shock Level unitless
+- MWD Shock Risk unitless
+- MWD Shock Peak m/s2
+- MWD Total Shocks unitless
+- Isonic Shock, Real-Time unitless
+- CRS Stick-Slip Amplitude rpm
+- MWD Stick-Slip PKtoPK RPM rpm
+- Shock Level, Computed DH unitless
+- SHKRSK_P unitless
+
+Pressure and Flow Data:
+- S2AC kPa
+- S1AC kPa
+- Stand Pipe Pressure kPa
+- Flow Pumps L/min
+- Pump 2 Strokes unitless
+- Pump 3 Stroke Rate 1/min
+- Pump 4 Stroke Rate 1/min
+- Pump 1 Stroke Rate 1/min
+- Pump 4 Strokes unitless
+- Pump 3 Strokes unitless
+- Pump 1 Strokes unitless
+- Average Standpipe Pressure kPa
+- ARC Annular Pressure kPa
+- Downhole Annulus Pressure, Computed DH kPa
+- FPWD Fracture Pressure Gradient g/cm3
+- FPWD Pore Pressure Gradient g/cm3
+- HYDR_RET_P kPa
+
+Temperature Data:
+- Annular Temperature degC
+- Temperature Out degC
+- Downhole Annulus Temperature, Computed DH degC
+- TMP In degC
+- GTEMP degC
+- HSTEMP degC
+- MWD DNI Temperature degC
+
+Mud Properties:
+- Mud Density In g/cm3
+- Mud Density Out g/cm3
+- ARC Equivalent Circulating Density g/cm3
+- Equivalent Circulating Density g/cm3
+- ECD_P g/cm3
+- IMWT g/cm3
+
+Formation Evaluation:
+- ARC Gamma Ray (uncorrected) gAPI
+- Gamma Ray, Average gAPI
+- Gamma Ray, Average, Computed DH gAPI
+- Density Porosity from ROBB_RT m3/m3
+- Best Thermal Neutron Porosity, Average m3/m3
+- Thermal Neutron Porosity, Average m3/m3
+- Utrasonic Caliper, Average Diameter, Computed DH cm
+- Bulk Density, Bottom, Computed DH g/cm3
+- Bulk Density Correction, Bottom, Computed DH g/cm3
+
+Resistivity Measurements:
+- IMP/ARC Non-BHcorr Phase-Shift Resistivity 40-in. at 2 MHz ohm.m
+- IMP/ARC Phase-Shift Conductivity 28-in. at 2 MHz mS/m
+- IMP/ARC Phase-Shift Conductivity 40-in. at 2 MHz mS/m
+- IMP/ARC Non-BHcorr Attenuation Resistivity 28-in. at 2 MHz ohm.m
+- IMP/ARC Attenuation Conductivity 40-in. at 2 MHz mS/m
+- IMP/ARC Non-BHcorr Attenuation Resistivity 40-in. at 2 MHz ohm.m
+- IMP/ARC Non-BHcorr Phase-Shift Resistivity 28-in. at 2 MHz ohm.m
+- IMP/ARC Phase-Shift Resistivity 28-in. at 2 MHz ohm.m
+- IMP/ARC Attenuation Resistivity 28-in. at 2 MHz ohm.m
+- IMP/ARC Attenuation Resistivity 40-in. at 2 MHz ohm.m
+- ARC Phase Shift Resistivity 40 inch at 2 MHz ohm.m
+- ARC Phase Shift Resistivity 28 inch at 2 MHz ohm.m
+- ARC Attenuation Resistivity 28 inch at 2 MHz ohm.m
+- ARC Attenuation Resistivity 40 inch at 2 MHz ohm.m
+- ARC Uncorrected Phase-Shift Conductivity 40 inch at 2 MHz, Computed DH mS/m
+- ARC Uncorrected Attenuation Resistivity 28 inch at 2 MHz, Computed DH ohm.m
+- ARC Uncorrected Attenuation Conductivity 40 inch Spacing at 2 MHz, Computed DH mS/m
+- ARC Uncorrected Phase-Shift Conductivity 28 inch at 2 MHz, Computed DH mS/m
+- ARC Uncorrected Phase Shift Resistivity 40 inch at 2 MHz, Computed DH ohm.m
+- ARC Uncorrected Attenuation Resistivity 40 inch at 2 MHz, Computed DH ohm.m
+- ARC Uncorrected Phase Shift Resistivity 28 inch at 2 MHz, Computed DH ohm.m
+
+Gas Chromatography:
+- Propane (C3) ppm
+- Iso-pentane (IC5) ppm
+- n-Penthane ppm
+- Ethane (C2) ppm
+- Nor-butane (NC4) ppm
+- Methane (C1) ppm
+- Iso-butane (IC4) ppm
+- Gas (avg) %
+
+MWD/LWD Directional Data:
+- CRS ToolFace dega
+- MWD Gravity Toolface dega
+- CRS Desired ToolFace dega
+- MWD Continuous Inclination dega
+- CRS Continuous Inclination dega
+- CRS Continuous Azimuth dega
+- MWD Continuous Azimuth dega
+- CRS Real-Time Status unitless
+- CRS Real-Time Mode unitless
+- Rig Mode unitless
+- CRS5 unitless
+- CRS4 unitless
+- CRS1 unitless
+- CRS Turbine RPM rpm
+- CRS Steering Ratio %
+
+Time and Interval Data:
+- Elapsed time in-slips s
+- TOFB s
+- OSTM s
+- TOBO s
+- Total SPM 1/min
+- Pump Time h
+- SHK3TM_RT min
+- Transit Time for Pump Off, Real-Time us
+- Delta-T Pump Off, Real-Time us/ft
+- Delta-T Compressional, Real-Time us/ft
+
+Statistical and Sample Data:
+- Total Strokes unitless
+- BHFG unitless
+- STKSLP unitless
+- RHX unitless
+- NRPM_RT unitless
+- EDRT unitless
+- RGX_RT unitless
+- AJAM_MWD unitless
+- DRET unitless
+- RHX_RT unitless
+- STUCK_RT unitless
+- TNPH_UNC_ECO_RT unitless
+- BPHI_UNC_ECO_RT unitless
+- UTSTAT unitless
+- STWD_RT unitless
+
+Survey and Geophysical Data:
+- Survey raw mag transverse nT
+- Survey raw grav inv transverse m/s2
+- Survey raw mag axial nT
+- Survey raw grav transax m/s2
+- Survey raw grav axial m/s2
+- ANGXCRS dega
+- ANGLX dega
+
+SPR MWD Data:
+- SPR MWD_01 mwd unitless
+- SPR MWD_02 mwd unitless
+- SPR MWD_06 mwd unitless
+- SPR MWD_04 mwd unitless
+- SPR MWD_07 mwd unitless
+- SPR MWD_08 mwd unitless
+- SPR MWD_03 mwd unitless
+- SPR MWD_10 mwd unitless
+- SPR MWD_05 mwd unitless
+
+Neutron and Thermal Data:
+- Thermal Neutron Far Count Rates, Average, Computed DH 1/s
+- Thermal Neutron Near Count Rates, Average, Computed DH 1/s
+- Neutron Monitor Activity Factor, Computed DH %
+
+Tank and Volume Data:
+- Tank volume (active) m3

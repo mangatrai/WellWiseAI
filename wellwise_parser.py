@@ -105,6 +105,33 @@ def process_single_file(file_path: str, parser_func, logger: logging.Logger,
         Tuple of (success: bool, message: str, data: Dict)
     """
     try:
+        # Special handling for CSV files
+        if file_path.lower().endswith('.csv'):
+            # CSV parser generates multiple batch files
+            output_files = parser_func(file_path, config['parsed_directory'])
+            
+            # Create metadata for CSV processing
+            output_data = {
+                'metadata': {
+                    'processing_timestamp': datetime.utcnow().isoformat(),
+                    'source_file': file_path,
+                    'output_files': output_files,
+                    'parser_version': '1.0.0',
+                    'file_type': 'csv'
+                },
+                'records': []  # CSV records are in separate batch files
+            }
+            
+            # Write metadata file
+            output_filename = f"{os.path.splitext(os.path.basename(file_path))[0]}_metadata.json"
+            output_path = os.path.join(config['parsed_directory'], output_filename)
+            
+            with open(output_path, 'w') as f:
+                json.dump(output_data, f, indent=2, default=str)
+            
+            return True, f"Successfully processed CSV {file_path} → {len(output_files)} batch files", output_data
+        
+        # Regular handling for other file types
         # Parse the file - pass logger to parser function
         records = parser_func(file_path, logger)
         
@@ -147,11 +174,13 @@ def process_single_file(file_path: str, parser_func, logger: logging.Logger,
 # Import your parsers
 from parsers.dlis import parse_dlis
 from parsers.las import parse_las
+from parsers.csv_parser import parse_csv_file
 
 # Map file extensions to parser functions
 PARSERS = {
     ".dlis": parse_dlis,
     ".las": parse_las,
+    ".csv": parse_csv_file,
     # add others here: etc.
 }
 
