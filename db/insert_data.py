@@ -14,6 +14,7 @@ from astrapy.data_types import DataAPIDate, DataAPISet
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+parsed_data_dir: str = os.getenv("PARSED_DIRECTORY", "structured_data")
 
 class WellWiseDBInserter:
     """Database inserter for WellWiseAI using Astra DB Data API."""
@@ -276,7 +277,7 @@ class WellWiseDBInserter:
             logger.error(f"Error reading JSON file {json_file_path}: {e}")
             return {'successful': 0, 'failed': 0, 'total': 0}
     
-    def insert_from_parsed_data_directory(self, parsed_data_dir: str = "parsed_data", batch_size: int = 100) -> Dict[str, int]:
+    def insert_from_parsed_data_directory(self, parsed_data_dir: str = None, batch_size: int = 100) -> Dict[str, int]:
         """
         Insert all records from the parsed_data directory.
         
@@ -329,7 +330,7 @@ def main():
     inserter = WellWiseDBInserter()
     
     # Insert all data from parsed_data directory
-    result = inserter.insert_from_parsed_data_directory()
+    result = inserter.insert_from_parsed_data_directory(parsed_data_dir)
     
     print(f"\n=== DATABASE INSERTION RESULTS ===")
     print(f"Total Records: {result['total']}")

@@ -31,4 +31,5 @@ Thumbs.db
 *.log
 
 # Project-specific
-parsed_data/
+structured_data/
+unstructured_data/

@@ -62,7 +62,7 @@ class WellWisePipeline:
         
         try:
             # Insert all data from parsed_data directory
-            result = self.inserter.insert_from_parsed_data_directory()
+            result = self.inserter.insert_from_parsed_data_directory(parsed_data_dir=os.getenv('PARSED_DIRECTORY', 'structured_data'))
             
             logger.info("✅ Database insertion completed")
             return result
