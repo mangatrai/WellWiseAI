@@ -1,0 +1,214 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Unstructured Parser Output Schema",
+  "description": "Schema for JSON output produced by the UnstructuredParser",
+  "type": "object",
+  "properties": {
+    "metadata": {
+      "type": "object",
+      "description": "Processing metadata for the unstructured file",
+      "properties": {
+        "processing_timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the file was processed"
+        },
+        "source_file": {
+          "type": "string",
+          "description": "Full path to the original source file"
+        },
+        "parser_name": {
+          "type": "string",
+          "description": "Name of the parser used (always 'UnstructuredParser')"
+        },
+        "file_type": {
+          "type": "string",
+          "description": "Type of file processed (always 'unstructured')"
+        },
+        "contextual_documents_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of contextual documents generated from the file"
+        }
+      },
+      "required": ["processing_timestamp", "source_file", "parser_name", "file_type", "contextual_documents_count"],
+      "additionalProperties": false
+    },
+    "contextual_documents": {
+      "type": "array",
+      "description": "Array of contextual documents extracted from the unstructured file",
+      "items": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "Extracted text content from the document chunk"
+          },
+          "metadata": {
+            "type": "object",
+            "description": "Metadata associated with this contextual document",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Original filename"
+              },
+              "size_bytes": {
+                "type": "number",
+                "description": "File size in bytes"
+              },
+              "size_mb": {
+                "type": "number",
+                "description": "File size in megabytes"
+              },
+              "extension": {
+                "type": "string",
+                "description": "File extension (e.g., '.pdf', '.docx')"
+              },
+              "modified_time": {
+                "type": "number",
+                "description": "Unix timestamp of file modification time"
+              },
+              "chunk_id": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Sequential identifier for this chunk within the file"
+              },
+              "element_type": {
+                "type": "string",
+                "description": "Type of element extracted (e.g., 'CompositeElement', 'Text', 'Table', 'Title')"
+              },
+              "chunk_type": {
+                "type": "string",
+                "description": "Type of chunking applied (e.g., 'semantic_section')"
+              },
+              "file_type": {
+                "type": "string",
+                "description": "Detected file type (e.g., 'pdf_document', 'word_document', 'excel_spreadsheet')"
+              },
+              "total_chunks": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Total number of chunks in the original file"
+              },
+              "element_types": {
+                "type": "object",
+                "description": "Count of different element types found in the file",
+                "additionalProperties": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "page_number": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Page number where this chunk was found (if applicable)"
+              },
+              "coordinates": {
+                "type": "object",
+                "description": "Coordinates of the element on the page (if applicable)",
+                "properties": {
+                  "x1": {"type": "number"},
+                  "y1": {"type": "number"},
+                  "x2": {"type": "number"},
+                  "y2": {"type": "number"}
+                },
+                "additionalProperties": false
+              },
+              "table_data": {
+                "type": "object",
+                "description": "Structured table data (if element is a table)",
+                "properties": {
+                  "rows": {
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {"type": "string"}
+                    }
+                  },
+                  "headers": {
+                    "type": "array",
+                    "items": {"type": "string"}
+                  },
+                  "row_count": {"type": "integer", "minimum": 0},
+                  "column_count": {"type": "integer", "minimum": 0}
+                },
+                "additionalProperties": false
+              },
+              "image_info": {
+                "type": "object",
+                "description": "Image metadata (if element is an image)",
+                "properties": {
+                  "image_type": {"type": "string"},
+                  "width": {"type": "integer"},
+                  "height": {"type": "integer"},
+                  "format": {"type": "string"},
+                  "page_number": {"type": "integer"}
+                },
+                "additionalProperties": false
+              },
+              "title_level": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Heading level (if element is a title)"
+              }
+            },
+            "required": ["name", "size_bytes", "size_mb", "extension", "modified_time", "chunk_id", "element_type", "chunk_type", "file_type", "total_chunks", "element_types"],
+            "additionalProperties": true
+          },
+          "document_type": {
+            "type": "string",
+            "description": "Type of document for vector storage (format: 'unstructured_{element_type}')"
+          },
+          "source": {
+            "type": "string",
+            "description": "Source file path (same as metadata.source_file)"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp when this contextual document was created"
+          }
+        },
+        "required": ["content", "metadata", "document_type", "source", "timestamp"],
+        "additionalProperties": false
+      },
+      "minItems": 0
+    }
+  },
+  "required": ["metadata", "contextual_documents"],
+  "additionalProperties": false,
+  "examples": [
+    {
+      "metadata": {
+        "processing_timestamp": "2025-08-12T02:52:04.512773",
+        "source_file": "/path/to/document.pdf",
+        "parser_name": "UnstructuredParser",
+        "file_type": "unstructured",
+        "contextual_documents_count": 2
+      },
+      "contextual_documents": [
+        {
+          "content": "Extracted text content from the document...",
+          "metadata": {
+            "name": "document.pdf",
+            "size_bytes": 618641,
+            "size_mb": 0.59,
+            "extension": ".pdf",
+            "modified_time": 1631621207.0,
+            "chunk_id": 0,
+            "element_type": "CompositeElement",
+            "chunk_type": "semantic_section",
+            "file_type": "pdf_document",
+            "total_chunks": 2,
+            "element_types": {
+              "CompositeElement": 2
+            }
+          },
+          "document_type": "unstructured_compositeelement",
+          "source": "/path/to/document.pdf",
+          "timestamp": "2025-08-11T21:52:04.512582"
+        }
+      ]
+    }
+  ]
+} 

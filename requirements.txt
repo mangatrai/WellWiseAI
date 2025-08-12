@@ -22,3 +22,5 @@ astrapy
 unstructured[all-docs]>=0.10.0
 unstructured[pdf]>=0.10.0
 unstructured[local-inference]>=0.10.0
+
+openai>=1.0.0

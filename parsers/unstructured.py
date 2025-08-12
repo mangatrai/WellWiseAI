@@ -5,6 +5,8 @@ Supports PDF, Excel, Word, PowerPoint, Images, and more
 """
 
 import time
+import json
+import os
 from pathlib import Path
 from typing import Dict, Any, List
 from datetime import datetime
@@ -17,6 +19,15 @@ class UnstructuredParser(BaseParser):
         super().__init__(file_path)
         # Supported file extensions from configuration
         self.supported_extensions = supported_extensions or []
+        
+        # Initialize OpenAI client if API key is available
+        self.openai_client = None
+        if os.getenv('OPENAI_API_KEY'):
+            try:
+                from openai import OpenAI
+                self.openai_client = OpenAI()
+            except ImportError:
+                self.logger.warning("OpenAI library not available")
     
     def can_parse(self) -> bool:
         """Check if this file can be parsed by Unstructured SDK"""
@@ -73,11 +84,22 @@ class UnstructuredParser(BaseParser):
             element_types = {}
             
             for i, chunk in enumerate(chunks):
+                # Handle metadata properly - convert ElementMetadata to dict if needed
+                chunk_metadata = getattr(chunk, 'metadata', {})
+                if hasattr(chunk_metadata, '__dict__'):
+                    # Convert ElementMetadata object to dict
+                    try:
+                        chunk_metadata = dict(chunk_metadata)
+                    except:
+                        chunk_metadata = {}
+                elif not isinstance(chunk_metadata, dict):
+                    chunk_metadata = {}
+                
                 chunk_data = {
                     'chunk_id': i,
                     'content': str(chunk),
                     'element_type': type(chunk).__name__,
-                    'metadata': getattr(chunk, 'metadata', {}),
+                    'metadata': chunk_metadata,
                     'chunk_type': 'semantic_section'
                 }
                 
@@ -91,7 +113,11 @@ class UnstructuredParser(BaseParser):
                 elif isinstance(chunk, Image):
                     chunk_data['image_info'] = self._extract_image_info(chunk)
                 elif isinstance(chunk, Title):
-                    chunk_data['title_level'] = getattr(chunk, 'metadata', {}).get('level', 1)
+                    chunk_data['title_level'] = chunk_metadata.get('level', 1)
+                
+                # Enhance metadata with LLM
+                enhanced_metadata = self.enhance_chunk_metadata(str(chunk))
+                chunk_data['metadata'].update(enhanced_metadata)
                 
                 data_sections.append(chunk_data)
             
@@ -121,6 +147,66 @@ class UnstructuredParser(BaseParser):
         except Exception as e:
             self.logger.error(f"Error parsing {self.file_path}: {e}")
             return self.create_error_result(str(e))
+    
+    def enhance_chunk_metadata(self, content: str) -> Dict[str, Any]:
+        """Enhance chunk metadata using OpenAI LLM"""
+        if not self.openai_client or len(content.strip()) < 50:
+            return {}
+        
+        try:
+            # Get model from environment or use default
+            model = os.getenv('CHAT_COMPLETION_MODEL', 'gpt-4o-mini')
+            
+            prompt = f"""
+Extract key information from this oil & gas document content and return JSON:
+
+Content:
+{content[:3000]}
+
+Return ONLY a valid JSON object with this exact structure:
+{{
+    "well_id": "well identifier or null",
+    "document_type": "petrophysical_report|md_plot|technical_document|facies_data|unknown",
+    "technical_terms": ["list", "of", "technical", "terms"],
+    "mathematical_formulas": ["list", "of", "equations", "or", "formulas"],
+    "geological_context": {{
+        "formations": ["formation", "names"],
+        "field": "field name or null"
+    }},
+    "depth_references": ["list", "of", "depth", "values"],
+    "curve_names": ["list", "of", "log", "curve", "names"]
+}}
+"""
+            
+            response = self.openai_client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=500,
+                temperature=0.1
+            )
+            
+            llm_response = response.choices[0].message.content
+            self.logger.debug(f"Raw LLM response: {llm_response}")
+            
+            # Clean up the response - remove markdown code blocks if present
+            cleaned_response = llm_response.strip()
+            if cleaned_response.startswith('```json'):
+                cleaned_response = cleaned_response[7:]  # Remove ```json
+            if cleaned_response.startswith('```'):
+                cleaned_response = cleaned_response[3:]  # Remove ```
+            if cleaned_response.endswith('```'):
+                cleaned_response = cleaned_response[:-3]  # Remove ```
+            
+            cleaned_response = cleaned_response.strip()
+            self.logger.debug(f"Cleaned response: {cleaned_response}")
+            
+            result = json.loads(cleaned_response)
+            self.logger.debug(f"LLM enhanced metadata: {result}")
+            return result
+            
+        except Exception as e:
+            self.logger.warning(f"LLM metadata enhancement failed: {e}")
+            return {}
     
     def _extract_table_data(self, table_element) -> Dict[str, Any]:
         """Extract structured data from table elements"""
