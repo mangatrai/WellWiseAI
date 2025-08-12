@@ -54,12 +54,32 @@ def get_environment_config() -> Dict[str, str]:
     config = {
         'data_directory': os.getenv("DATA_DIRECTORY", "./data"),
         'parsed_directory': os.getenv("PARSED_DIRECTORY", "parsed_data"),
+        'unstructured_directory': os.getenv("UNST_PARSED_DATA_DIR", "unstructured_data"),
+        'unstructured_file_types': os.getenv("UNSTRUCTURED_FILE_TYPES", "").split(",") if os.getenv("UNSTRUCTURED_FILE_TYPES") else [],
+        'structured_file_types': os.getenv("STRUCTURED_FILE_TYPES", ".las,.dlis,.csv").split(","),
         'max_workers': int(os.getenv("MAX_WORKERS", "4")),
         'retry_attempts': int(os.getenv("RETRY_ATTEMPTS", "3")),
         'timeout': int(os.getenv("TIMEOUT_SECONDS", "300")),
         'log_level': os.getenv("LOG_LEVEL", "INFO")
     }
     return config
+
+def is_unstructured_file(file_path: str, config: Dict[str, str]) -> bool:
+    """Check if a file should be processed as unstructured based on config."""
+    if not config.get('unstructured_file_types'):
+        return False
+    
+    file_ext = os.path.splitext(file_path)[1].lower()
+    return file_ext in config['unstructured_file_types']
+
+def get_parser_for_extension(ext: str):
+    """Get the appropriate parser function for a file extension."""
+    parser_map = {
+        ".dlis": parse_dlis,
+        ".las": parse_las, 
+        ".csv": parse_csv_file,
+    }
+    return parser_map.get(ext)
 
 def validate_json_output(data: List[Dict]) -> bool:
     """Validate JSON output structure and data integrity."""
@@ -171,18 +191,72 @@ def process_single_file(file_path: str, parser_func, logger: logging.Logger,
         logger.error(f"Error processing {file_path}: {str(e)}", exc_info=True)
         return False, f"Failed to process {file_path}: {str(e)}", {}
 
+def process_unstructured_file(file_path: str, logger: logging.Logger, 
+                            config: Dict[str, str]) -> Tuple[bool, str, Dict]:
+    """
+    Process a single unstructured file using UnstructuredParser.
+    
+    Returns:
+        Tuple of (success: bool, message: str, data: Dict)
+    """
+    try:
+        # Create UnstructuredParser instance with configuration
+        parser = UnstructuredParser(file_path, config['unstructured_file_types'])
+        
+        # Check if parser can handle this file
+        if not parser.can_parse():
+            return False, f"Cannot parse unstructured file: {file_path}", {}
+        
+        # Parse the file
+        parsed_data = parser.parse()
+        
+        if parsed_data.error:
+            return False, f"Error parsing unstructured file {file_path}: {parsed_data.error}", {}
+        
+        # Generate contextual documents
+        contextual_docs = parser.generate_contextual_documents()
+        
+        # Save to unstructured directory
+        parent_dir = os.path.basename(os.path.dirname(file_path))
+        base_name = os.path.splitext(os.path.basename(file_path))[0]
+        output_filename = f"{parent_dir}_{base_name}_unstructured.json"
+        output_path = os.path.join(config['unstructured_directory'], output_filename)
+        
+        # Prepare output data
+        output_data = {
+            'metadata': {
+                'processing_timestamp': datetime.utcnow().isoformat(),
+                'source_file': file_path,
+                'parser_name': 'UnstructuredParser',
+                'file_type': parsed_data.file_type,
+                'contextual_documents_count': len(contextual_docs)
+            },
+            'contextual_documents': [
+                {
+                    'content': doc.content,
+                    'metadata': doc.metadata,
+                    'document_type': doc.document_type,
+                    'source': doc.source,
+                    'timestamp': doc.timestamp
+                } for doc in contextual_docs
+            ]
+        }
+        
+        # Write to file
+        with open(output_path, 'w') as f:
+            json.dump(output_data, f, indent=2, default=str)
+        
+        return True, f"Successfully processed unstructured {file_path} → {output_path}", output_data
+        
+    except Exception as e:
+        logger.error(f"Error processing unstructured file {file_path}: {str(e)}", exc_info=True)
+        return False, f"Failed to process unstructured file {file_path}: {str(e)}", {}
+
 # Import your parsers
 from parsers.dlis import parse_dlis
 from parsers.las import parse_las
 from parsers.csv_parser import parse_csv_file
-
-# Map file extensions to parser functions
-PARSERS = {
-    ".dlis": parse_dlis,
-    ".las": parse_las,
-    ".csv": parse_csv_file,
-    # add others here: etc.
-}
+from parsers.unstructured import UnstructuredParser
 
 def main():
     # Get configuration first
@@ -199,66 +273,130 @@ def main():
         logger.error(f"Data directory does not exist: {data_directory}")
         raise ValueError(f"Data directory does not exist: {data_directory}")
     
-    # Create output directory
+    # Create output directories
     os.makedirs(config['parsed_directory'], exist_ok=True)
-    logger.info(f"Output directory: {config['parsed_directory']}")
+    os.makedirs(config['unstructured_directory'], exist_ok=True)
+    logger.info(f"Structured output directory: {config['parsed_directory']}")
+    logger.info(f"Unstructured output directory: {config['unstructured_directory']}")
     
-    # Collect all files to process
-    files_to_process = []
+    # Collect all files to process - separate structured and unstructured
+    structured_files = []
+    unstructured_files = []
+    unmatched_files = []
+    
     for root, _, files in os.walk(data_directory):
         for fname in files:
+            file_path = os.path.join(root, fname)
             ext = os.path.splitext(fname)[1].lower()
-            if ext in PARSERS:
-                file_path = os.path.join(root, fname)
-                files_to_process.append((file_path, PARSERS[ext]))
+            
+            # Check if it's an unstructured file first
+            if is_unstructured_file(file_path, config):
+                unstructured_files.append(file_path)
+                logger.debug(f"Unstructured file: {file_path}")
+            # Then check if it's a structured file using config
+            elif ext in config['structured_file_types']:
+                parser_func = get_parser_for_extension(ext)
+                if parser_func:
+                    structured_files.append((file_path, parser_func))
+                    logger.debug(f"Structured file: {file_path}")
+                else:
+                    unmatched_files.append(file_path)
+                    logger.warning(f"Structured file type configured but no parser available: {file_path} (extension: {ext})")
+            # Handle unmatched files
+            else:
+                unmatched_files.append(file_path)
+                logger.warning(f"Unmatched file type (no parser available): {file_path} (extension: {ext})")
     
-    logger.info(f"Found {len(files_to_process)} files to process")
+    logger.info(f"Found {len(structured_files)} structured files to process")
+    logger.info(f"Found {len(unstructured_files)} unstructured files to process")
+    logger.info(f"Found {len(unmatched_files)} unmatched files (ignored)")
     
-    if not files_to_process:
+    if unmatched_files:
+        logger.warning(f"Unmatched files that will be ignored: {unmatched_files}")
+    
+    # Process structured files (existing logic)
+    if structured_files:
+        logger.info("Processing structured files...")
+        successful_files = 0
+        failed_files = 0
+        
+        with tqdm(total=len(structured_files), desc="Processing structured files") as pbar:
+            # Use ThreadPoolExecutor for parallel processing
+            with concurrent.futures.ThreadPoolExecutor(
+                max_workers=config['max_workers']
+            ) as executor:
+                # Submit all tasks
+                future_to_file = {
+                    executor.submit(process_single_file, file_path, parser_func, logger, config): file_path
+                    for file_path, parser_func in structured_files
+                }
+                
+                # Process completed tasks
+                for future in concurrent.futures.as_completed(future_to_file):
+                    file_path = future_to_file[future]
+                    try:
+                        success, message, data = future.result()
+                        if success:
+                            successful_files += 1
+                            logger.info(message)
+                        else:
+                            failed_files += 1
+                            logger.error(message)
+                    except Exception as e:
+                        failed_files += 1
+                        logger.error(f"Unexpected error processing {file_path}: {str(e)}", exc_info=True)
+                    
+                    pbar.update(1)
+                    pbar.set_postfix({
+                        'Success': successful_files,
+                        'Failed': failed_files
+                    })
+        
+        logger.info(f"Structured files processing complete. Success: {successful_files}, Failed: {failed_files}")
+    
+    # Process unstructured files
+    if unstructured_files:
+        logger.info("Processing unstructured files...")
+        successful_files = 0
+        failed_files = 0
+        
+        with tqdm(total=len(unstructured_files), desc="Processing unstructured files") as pbar:
+            # Use ThreadPoolExecutor for parallel processing
+            with concurrent.futures.ThreadPoolExecutor(
+                max_workers=config['max_workers']
+            ) as executor:
+                # Submit all tasks
+                future_to_file = {
+                    executor.submit(process_unstructured_file, file_path, logger, config): file_path
+                    for file_path in unstructured_files
+                }
+                
+                # Process completed tasks
+                for future in concurrent.futures.as_completed(future_to_file):
+                    file_path = future_to_file[future]
+                    try:
+                        success, message, data = future.result()
+                        if success:
+                            successful_files += 1
+                            logger.info(message)
+                        else:
+                            failed_files += 1
+                            logger.error(message)
+                    except Exception as e:
+                        failed_files += 1
+                        logger.error(f"Unexpected error processing unstructured file {file_path}: {str(e)}", exc_info=True)
+                    
+                    pbar.update(1)
+                    pbar.set_postfix({
+                        'Success': successful_files,
+                        'Failed': failed_files
+                    })
+        
+        logger.info(f"Unstructured files processing complete. Success: {successful_files}, Failed: {failed_files}")
+    
+    if not structured_files and not unstructured_files:
         logger.warning("No files found to process")
         return
-    
-    # Process files with progress tracking
-    successful_files = 0
-    failed_files = 0
-    
-    with tqdm(total=len(files_to_process), desc="Processing files") as pbar:
-        # Use ThreadPoolExecutor for parallel processing
-        with concurrent.futures.ThreadPoolExecutor(
-            max_workers=config['max_workers']
-        ) as executor:
-            # Submit all tasks
-            future_to_file = {
-                executor.submit(process_single_file, file_path, parser_func, logger, config): file_path
-                for file_path, parser_func in files_to_process
-            }
-            
-            # Process completed tasks
-            for future in concurrent.futures.as_completed(future_to_file):
-                file_path = future_to_file[future]
-                try:
-                    success, message, data = future.result()
-                    if success:
-                        successful_files += 1
-                        logger.info(message)
-                    else:
-                        failed_files += 1
-                        logger.error(message)
-                except Exception as e:
-                    failed_files += 1
-                    logger.error(f"Unexpected error processing {file_path}: {str(e)}", exc_info=True)
-                
-                pbar.update(1)
-                pbar.set_postfix({
-                    'Success': successful_files,
-                    'Failed': failed_files
-                })
-    
-    # Summary
-    logger.info(f"Processing complete. Success: {successful_files}, Failed: {failed_files}")
-    
-    if failed_files > 0:
-        logger.warning(f"{failed_files} files failed to process. Check logs for details.")
 
 if __name__ == "__main__":
     main()

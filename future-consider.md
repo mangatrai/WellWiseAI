@@ -300,3 +300,98 @@ Neutron and Thermal Data:
 
 Tank and Volume Data:
 - Tank volume (active) m3
+
+## FUTURE PARSER IMPROVEMENTS
+
+### 1. Catch-All Parser Strategy
+**Problem**: Currently, files that don't match any configured extension are ignored
+**Proposed Solution**: Use UnstructuredParser as a catch-all parser for unknown file types
+
+**Implementation Ideas**:
+- Add a "catch-all" mode to UnstructuredParser that accepts any file type
+- Modify file classification logic to route unmatched files to UnstructuredParser
+- Create a fallback chain: Structured → Unstructured → Ignore
+
+**Benefits**:
+- No data loss - all files get processed somehow
+- Leverages Unstructured SDK's broad file type support
+- Provides vector searchable content for unknown file types
+
+### 2. Structured Parser Fallback Strategy
+**Problem**: If structured parsers fail, files are completely lost
+**Proposed Solution**: Implement fallback to UnstructuredParser when structured parsing fails
+
+**Implementation Ideas**:
+- Add error handling in structured parsers to catch parsing failures
+- Implement retry logic: Structured Parser → Unstructured Parser
+- Track which files were processed via fallback vs primary method
+
+**Benefits**:
+- Higher success rate for file processing
+- Graceful degradation when structured parsing fails
+- Maintains data accessibility even with parsing errors
+
+### 3. Enhanced File Classification
+**Current**: Binary classification (structured vs unstructured vs ignored)
+**Proposed**: Multi-tier classification with fallbacks
+
+**Classification Tiers**:
+1. **Primary Structured**: LAS, DLIS, CSV with dedicated parsers
+2. **Secondary Structured**: Other structured formats (JSON, XML, etc.)
+3. **Primary Unstructured**: PDF, DOC, XLSX with UnstructuredParser
+4. **Catch-All Unstructured**: Unknown files via UnstructuredParser
+5. **Ignored**: Only truly unprocessable files (corrupted, system files)
+
+### 4. Configuration-Driven Fallbacks
+**Proposed .env Configuration**:
+```bash
+# Primary structured parsers
+STRUCTURED_FILE_TYPES=.las,.dlis,.csv
+
+# Primary unstructured parsers  
+UNSTRUCTURED_FILE_TYPES=.pdf,.docx,.xlsx,.txt
+
+# Fallback behavior
+ENABLE_CATCH_ALL_PARSER=true
+ENABLE_STRUCTURED_FALLBACK=true
+MAX_FALLBACK_ATTEMPTS=2
+```
+
+### 5. Processing Pipeline Improvements
+**Current Flow**:
+```
+File → Classification → Single Parser → Output
+```
+
+**Proposed Flow**:
+```
+File → Classification → Primary Parser → Success?
+                                    ↓ No
+                              Fallback Parser → Success?
+                                              ↓ No
+                                        Log & Ignore
+```
+
+### 6. Monitoring and Analytics
+**Track Processing Methods**:
+- Primary structured parsing success rate
+- Fallback unstructured parsing success rate
+- File types that frequently need fallbacks
+- Performance impact of fallback processing
+
+**Benefits**:
+- Identify which file types need dedicated parsers
+- Optimize processing pipeline based on actual usage
+- Improve success rates over time
+
+### 7. Implementation Priority
+1. **Phase 1**: Add catch-all UnstructuredParser for unmatched files
+2. **Phase 2**: Implement structured parser fallback to unstructured
+3. **Phase 3**: Enhanced configuration and monitoring
+4. **Phase 4**: Performance optimization and analytics
+
+### 8. Considerations
+- **Performance**: Fallback processing adds overhead
+- **Quality**: Unstructured parsing may be less precise than structured
+- **Storage**: More files processed = more storage requirements
+- **Complexity**: More complex error handling and retry logic

@@ -17,3 +17,8 @@ lasio
 
 # Astra DB Data API client
 astrapy
+
+# Unstructured SDK for document processing
+unstructured[all-docs]>=0.10.0
+unstructured[pdf]>=0.10.0
+unstructured[local-inference]>=0.10.0
