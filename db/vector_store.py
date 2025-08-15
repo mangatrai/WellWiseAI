@@ -11,6 +11,7 @@ import logging
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
+import glob
 
 from astrapy import DataAPIClient
 from astrapy.constants import VectorMetric
@@ -57,6 +58,12 @@ class AstraVectorStoreSingle:
         
         # Single collection name - get from environment or use default
         self.collection_name = os.getenv('ASTRA_DB_COLLECTION', 'oil_gas_documents')
+
+        # Embedding model name
+        self.embded_model = os.getenv('EMBED_MODEL', 'text-embedding-ada-002')
+
+        #astra api key name
+        self.astra_api_key_name = os.getenv('ASTRA_OPENAI_KEY_NAME', 'openai-key')
         
         # Initialize Astra DB client
         self.client = DataAPIClient()
@@ -98,9 +105,13 @@ class AstraVectorStoreSingle:
                 collection_definition = CollectionDefinition(
                     vector=CollectionVectorOptions(
                         metric=VectorMetric.COSINE,
+                        dimension=1536,
                         service=VectorServiceOptions(
-                            provider="nvidia",
-                            model_name="nvidia/nv-embedqa-e5-v5",
+                            provider="openai",
+                            model_name=self.embded_model,
+                            authentication={
+                                "providerKey": self.astra_api_key_name,
+                            },
                         )
                     ),
                     lexical=CollectionLexicalOptions(
@@ -138,26 +149,58 @@ class AstraVectorStoreSingle:
             print(f"  📋 Full traceback: {traceback.format_exc()}")
             raise
     
-    def load_contextual_documents(self, documents_file: str = None):
+    def load_contextual_documents(self, documents_file: str = None, documents_dir: str = None):
         """Load contextual documents into the single collection
         
         Automatically finds the most recent contextual documents file if not specified
         """
-        if documents_file is None:
-            # Find the most recent contextual documents file
-            import glob
-            files = glob.glob("**/contextual_documents_*.json", recursive=True)
+        if documents_dir:
+            # Load all unstructured files from directory
+            pattern = os.path.join(documents_dir, "*_unstructured.json")
+            files = glob.glob(pattern)
             if not files:
-                self.logger.error("❌ No contextual documents files found")
+                self.logger.error(f"❌ No *_unstructured.json files found in directory: {documents_dir}")
                 return False
             
-            # Sort by modification time and get the most recent
-            files.sort(key=lambda x: os.path.getmtime(x), reverse=True)
-            documents_file = files[0]
-            print(f"📁 Auto-detected documents file: {documents_file}")
-        
-        print(f"📁 Loading contextual documents from: {documents_file}")
-        
+            print(f"📁 Found {len(files)} unstructured files in directory: {documents_dir}")
+            total_loaded = 0
+            
+            for file_path in files:
+                print(f"📄 Processing: {os.path.basename(file_path)}")
+                success = self._load_single_file(file_path)
+                if success:
+                    total_loaded += 1
+            
+            print(f"🎉 Successfully processed {total_loaded}/{len(files)} files")
+            return total_loaded > 0
+            
+        elif documents_file:
+            # Load single specified file
+            return self._load_single_file(documents_file)
+            
+        else:
+            # Auto-detect: Look for *_unstructured.json in UNST_PARSED_DATA_DIR
+            default_dir = os.getenv('UNST_PARSED_DATA_DIR', 'unstructured_data')
+            pattern = os.path.join(default_dir, "*_unstructured.json")
+            files = glob.glob(pattern)
+            if not files:
+                self.logger.error(f"❌ No *_unstructured.json files found in default directory: {default_dir}")
+                return False
+            
+            print(f"📁 Found {len(files)} unstructured files in default directory: {default_dir}")
+            total_loaded = 0
+            
+            for file_path in files:
+                print(f"📄 Processing: {os.path.basename(file_path)}")
+                success = self._load_single_file(file_path)
+                if success:
+                    total_loaded += 1
+            
+            print(f"🎉 Successfully processed {total_loaded}/{len(files)} files")
+            return total_loaded > 0
+    
+    def _load_single_file(self, documents_file: str) -> bool:
+        """Load a single JSON file into the collection"""
         if not os.path.exists(documents_file):
             self.logger.error(f"❌ Documents file not found: {documents_file}")
             return False
@@ -166,16 +209,16 @@ class AstraVectorStoreSingle:
             with open(documents_file, 'r') as f:
                 documents = json.load(f)
             
-            print(f"📄 Found {len(documents)} contextual documents to load")
+            print(f"📄 Found {len(documents)} documents to load from {os.path.basename(documents_file)}")
             
             # Load all documents into the single collection
             loaded_count = self._load_documents_to_collection(documents)
             
-            print(f"🎉 Successfully loaded {loaded_count} documents to Astra DB")
+            print(f"🎉 Successfully loaded {loaded_count} documents to Astra DB from {os.path.basename(documents_file)}")
             return True
             
         except Exception as e:
-            self.logger.error(f"❌ Error loading documents: {e}")
+            self.logger.error(f"❌ Error loading documents from {os.path.basename(documents_file)}: {e}")
             import traceback
             print(f"📋 Full traceback: {traceback.format_exc()}")
             return False
@@ -185,51 +228,49 @@ class AstraVectorStoreSingle:
         try:
             collection = self.database.get_collection(self.collection_name)
             
-            # Prepare documents for insertion with $hybrid key and rich metadata
+            # Handle new structure with contextual_documents key
+            if isinstance(documents, dict) and 'contextual_documents' in documents:
+                documents = documents['contextual_documents']
+            
+            # Prepare documents for insertion with direct field access
             documents_to_insert = []
             for doc in documents:
                 # Generate a unique ID
                 doc_id = str(uuid.uuid4())
                 
-                # Extract well name and other metadata from the new structure
-                well_name = self._extract_well_name_from_new_structure(doc)
-                file_type = self._extract_file_type_from_new_structure(doc)
-                parser_type = self._extract_parser_type_from_new_structure(doc)
-                
-                # Create rich metadata for filtering
+                # Create minimal metadata with only essential fields
                 metadata = {
-                    **doc.get('metadata', {}),
-                    'well_name': well_name,
-                    'document_type': doc['document_type'],
-                    'parser_type': parser_type,
-                    'file_type': file_type,
-                    'source': doc['source'],
-                    'timestamp': doc.get('timestamp', ''),
                     'created_at': datetime.now().isoformat(),
-                    # Add tags for easier filtering
-                    'tags': self._generate_tags_from_new_structure(doc, well_name)
+                    'chunk_id': doc.get('metadata', {}).get('chunk_id', 0),
+                    'element_type': doc.get('metadata', {}).get('element_type', ''),
+                    'total_chunks': doc.get('metadata', {}).get('total_chunks', 0)
                 }
                 
-                # Prepare hybrid content with well name enhancement
-                if well_name:
-                    hybrid_content = f"{well_name} {doc['content']}"
-                else:
-                    hybrid_content = doc['content']
+                # Simple hybrid content: well_id + content
+                well_id = doc.get('well_id', '')
+                hybrid_content = f"{well_id} {doc['content']}" if well_id else doc['content']
                 
-                # Create document for Astra DB with hybrid search support
+                # Create document for Astra DB with direct field access
                 astra_doc = {
                     "_id": doc_id,
                     "content": doc['content'],
+                    "well_id": doc.get('well_id', ''),
+                    "depth_references": doc.get('depth_references', []),
+                    "technical_terms": doc.get('technical_terms', []),
+                    "mathematical_formulas": doc.get('mathematical_formulas', []),
+                    "geological_context": doc.get('geological_context', {}),
+                    "curve_names": doc.get('curve_names', []),
+                    "document_type": doc.get('document_type', ''),
+                    "source": doc.get('source', ''),
+                    "timestamp": doc.get('timestamp', ''),
                     "metadata": metadata,
-                    "document_type": doc['document_type'],
-                    "source": doc['source'],
-                    "$hybrid": hybrid_content  # Use $hybrid for both vector and lexical search
+                    "$hybrid": hybrid_content
                 }
                 
                 documents_to_insert.append(astra_doc)
             
             # Insert documents in batches
-            batch_size = 100
+            batch_size = 10
             loaded_count = 0
             
             for i in range(0, len(documents_to_insert), batch_size):
@@ -249,94 +290,7 @@ class AstraVectorStoreSingle:
             print(f"📋 Full traceback: {traceback.format_exc()}")
             return 0
     
-    def _extract_well_name_from_new_structure(self, doc: Dict) -> str:
-        """Extract well name from metadata only - no path extraction hack"""
-        metadata = doc.get('metadata', {})
-        return metadata.get('well_name', '')  # Only from metadata, no fallbacks
-    
-    def _extract_file_type_from_new_structure(self, doc: Dict) -> str:
-        """Extract file type from the new structure"""
-        metadata = doc.get('metadata', {})
-        
-        # Get from metadata
-        if 'file_type' in metadata:
-            return metadata['file_type']
-        
-        # Get from source extension
-        source = doc.get('source', '')
-        if '.' in source:
-            return source.split('.')[-1].upper()
-        
-        return "unknown"
-    
-    def _extract_parser_type_from_new_structure(self, doc: Dict) -> str:
-        """Extract parser type from the new structure"""
-        document_type = doc.get('document_type', '')
-        
-        # Map document types to parser types
-        if document_type.startswith('unstructured_'):
-            return 'UnstructuredParser'
-        elif document_type in ['dlis', 'segy']:
-            return f'{document_type.capitalize()}Parser'
-        else:
-            return 'UnknownParser'
-    
-    def _generate_tags_from_new_structure(self, doc: Dict, well_name: str) -> List[str]:
-        """Generate tags for easier filtering from the new structure"""
-        tags = []
-        
-        # Add document type as tag
-        document_type = doc.get('document_type', '')
-        tags.append(document_type)
-        
-        # Add well name if available
-        if well_name:
-            tags.append(well_name)
-            tags.append("well_data")
-        
-        # Add tags based on document type
-        if document_type.startswith('unstructured_'):
-            tags.extend(['unstructured', 'semantic_chunk'])
-            
-            # Add specific tags based on element type
-            metadata = doc.get('metadata', {})
-            element_type = metadata.get('element_type', '')
-            if element_type == 'CompositeElement':
-                tags.append('composite_element')
-            elif element_type == 'Table':
-                tags.append('table_data')
-            elif element_type == 'Image':
-                tags.append('image_data')
-        
-        elif document_type == 'dlis':
-            tags.extend(['dlis', 'digital_log', 'well_log'])
-        elif document_type == 'segy':
-            tags.extend(['segy', 'seismic', 'geophysics'])
-        
-        # Add tags based on file type
-        file_type = self._extract_file_type_from_new_structure(doc)
-        if file_type in ['ASC', 'LAS', 'DAT']:
-            tags.extend(['well_log', 'petrophysical'])
-        elif file_type == 'PDF':
-            tags.append('report')
-        elif file_type == 'XLSX':
-            tags.append('spreadsheet')
-        
-        # Add tags from metadata
-        metadata = doc.get('metadata', {})
-        if 'chunk_id' in metadata:
-            tags.append(f"chunk_{metadata['chunk_id']}")
-        
-        # Add source-based tags
-        source = doc.get('source', '')
-        if 'petro' in source.lower():
-            tags.append('petrophysical')
-        if 'seismic' in source.lower():
-            tags.append('seismic')
-        if 'facies' in source.lower():
-            tags.append('facies')
-        
-        return list(set(tags))  # Remove duplicates
+
     
     def get_collection_stats(self) -> Dict[str, Any]:
         """Get statistics for the collection"""
@@ -366,25 +320,29 @@ class AstraVectorStoreSingle:
     
     def search_documents(self, query: str, 
                         document_types: List[str] = None,
-                        well_names: List[str] = None,
-                        tags: List[str] = None,
+                        well_ids: List[str] = None,
+                        technical_terms: List[str] = None,
+                        formations: List[str] = None,
                         limit: int = 5, 
                         similarity_threshold: float = 0.7) -> List[VectorSearchResult]:
         """Search documents using vector similarity with optional filtering"""
         try:
             collection = self.database.get_collection(self.collection_name)
             
-            # Build filter based on metadata
+            # Build filter based on direct fields
             filter_query = {}
             
             if document_types:
                 filter_query["document_type"] = {"$in": document_types}
             
-            if well_names:
-                filter_query["metadata.well_name"] = {"$in": well_names}
+            if well_ids:
+                filter_query["well_id"] = {"$in": well_ids}
             
-            if tags:
-                filter_query["metadata.tags"] = {"$in": tags}
+            if technical_terms:
+                filter_query["technical_terms"] = {"$in": technical_terms}
+            
+            if formations:
+                filter_query["geological_context.formations"] = {"$in": formations}
             
             # Use vectorize service for semantic search
             search_results = collection.find(
@@ -418,24 +376,28 @@ class AstraVectorStoreSingle:
     
     def search_documents_hybrid(self, query: str, 
                                document_types: List[str] = None,
-                               well_names: List[str] = None,
-                               tags: List[str] = None,
+                               well_ids: List[str] = None,
+                               technical_terms: List[str] = None,
+                               formations: List[str] = None,
                                limit: int = 5) -> List[VectorSearchResult]:
         """Search documents using hybrid search (vector + lexical + reranking)"""
         try:
             collection = self.database.get_collection(self.collection_name)
             
-            # Build filter based on metadata
+            # Build filter based on direct fields
             filter_query = {}
             
             if document_types:
                 filter_query["document_type"] = {"$in": document_types}
             
-            if well_names:
-                filter_query["metadata.well_name"] = {"$in": well_names}
+            if well_ids:
+                filter_query["well_id"] = {"$in": well_ids}
             
-            if tags:
-                filter_query["metadata.tags"] = {"$in": tags}
+            if technical_terms:
+                filter_query["technical_terms"] = {"$in": technical_terms}
+            
+            if formations:
+                filter_query["geological_context.formations"] = {"$in": formations}
             
             # Use hybrid search with reranking
             search_results = collection.find_and_rerank(
@@ -472,13 +434,13 @@ class AstraVectorStoreSingle:
             self.logger.error(f"❌ Error in hybrid search: {e}")
             return []
     
-    def get_documents_by_well(self, well_name: str, limit: int = 10) -> List[Dict[str, Any]]:
+    def get_documents_by_well(self, well_id: str, limit: int = 10) -> List[Dict[str, Any]]:
         """Get all documents related to a specific well"""
         try:
             collection = self.database.get_collection(self.collection_name)
             
             results = collection.find(
-                {"metadata.well_name": well_name},
+                {"well_id": well_id},
                 limit=limit
             )
             return list(results)
@@ -571,7 +533,7 @@ class AstraQueryEngineSingle:
         # Search for all documents related to this well using hybrid search
         results = self.vector_store.search_documents_hybrid(
             query=f"well {well_name}",
-            well_names=[well_name],
+            well_ids=[well_name],
             limit=limit
         )
         
@@ -604,6 +566,8 @@ def main():
     parser.add_argument("--token", help="Astra DB token (or set ASTRA_DB_TOKEN in .env)")
     parser.add_argument("--keyspace", help="Astra DB keyspace (or set ASTRA_DB_KEYSPACE in .env)")
     parser.add_argument("--load-documents", action="store_true", help="Load documents into Astra DB")
+    parser.add_argument("--documents-dir", help="Directory containing unstructured JSON files")
+    parser.add_argument("--documents-file", help="Specific JSON file to load")
     parser.add_argument("--query", help="Test query")
     parser.add_argument("--well", help="Specific well name for queries")
     
@@ -625,7 +589,12 @@ def main():
     
     if args.load_documents:
         # Load documents
-        success = vector_store.load_contextual_documents()
+        if args.documents_file:
+            success = vector_store.load_contextual_documents(documents_file=args.documents_file)
+        elif args.documents_dir:
+            success = vector_store.load_contextual_documents(documents_dir=args.documents_dir)
+        else:
+            success = vector_store.load_contextual_documents()
         if success:
             # Show statistics
             stats = vector_store.get_collection_stats()
@@ -657,15 +626,15 @@ def main():
     
     # Test vector search directly
     if args.load_documents:
-        print(f"\n🧪 Testing vector search...")
+        print(f"\n🧪 Testing hybrid search...")
         try:
-            # Test a simple vector search
-            test_results = vector_store.search_documents("well data", limit=3)
-            print(f"   Vector search test found {len(test_results)} results")
+            # Test a simple hybrid search
+            test_results = vector_store.search_documents_hybrid("well data", limit=3)
+            print(f"   Hybrid search test found {len(test_results)} results")
             if test_results:
-                print(f"   First result similarity: {test_results[0].similarity_score:.3f}")
+                print(f"   First result rerank score: {test_results[0].rerank_score:.3f}")
         except Exception as e:
-            print(f"   ❌ Vector search test failed: {e}")
+            print(f"   ❌ Hybrid search test failed: {e}")
 
 if __name__ == "__main__":
     main() 

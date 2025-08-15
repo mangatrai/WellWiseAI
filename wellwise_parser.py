@@ -226,18 +226,27 @@ def process_unstructured_file(file_path: str, logger: logging.Logger,
         output_data = {
             'metadata': {
                 'processing_timestamp': datetime.utcnow().isoformat(),
-                'source_file': file_path,
-                'parser_name': 'UnstructuredParser',
-                'file_type': parsed_data.file_type,
+                'source_file': os.path.basename(file_path),
                 'contextual_documents_count': len(contextual_docs)
             },
             'contextual_documents': [
                 {
                     'content': doc.content,
-                    'metadata': doc.metadata,
-                    'document_type': doc.document_type,
-                    'source': doc.source,
-                    'timestamp': doc.timestamp
+                    'well_id': doc.metadata.get('well_id', ''),
+                    'depth_references': doc.metadata.get('depth_references', []),
+                    'technical_terms': doc.metadata.get('technical_terms', []),
+                    'mathematical_formulas': doc.metadata.get('mathematical_formulas', []),
+                    'geological_context': doc.metadata.get('geological_context', {}),
+                    'curve_names': doc.metadata.get('curve_names', []),
+                    'document_type': doc.metadata.get('document_type', doc.document_type),
+                    'source': os.path.basename(doc.source),
+                    'timestamp': doc.timestamp,
+                    'metadata': {
+                        'chunk_id': doc.metadata.get('chunk_id', 0),
+                        'total_chunks': doc.metadata.get('total_chunks', 0),
+                        'element_type': doc.metadata.get('element_type', ''),
+                        'chunk_type': doc.metadata.get('chunk_type', '')
+                    }
                 } for doc in contextual_docs
             ]
         }
