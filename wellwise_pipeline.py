@@ -9,6 +9,7 @@ import logging
 from datetime import datetime
 from wellwise_parser import main as parse_data
 from db.insert_data import WellWiseDBInserter
+from db.vector_store import AstraVectorStoreSingle
 
 # Configure logging
 logging.basicConfig(
@@ -27,6 +28,15 @@ class WellWisePipeline:
         # Initialize inserter - it will handle its own credentials
         self.inserter = WellWiseDBInserter()
         self.db_available = self.inserter.is_available()
+        
+        # Initialize vector store for unstructured data
+        try:
+            self.vector_store = AstraVectorStoreSingle()
+            self.vector_store_available = True
+        except Exception as e:
+            logger.warning(f"Vector store not available: {e}")
+            self.vector_store = None
+            self.vector_store_available = False
     
     def run_parsing(self) -> bool:
         """
@@ -71,6 +81,38 @@ class WellWisePipeline:
             logger.error(f"❌ Error during database insertion: {e}")
             return {'successful': 0, 'failed': 0, 'total': 0}
     
+    def run_vector_store_insertion(self) -> dict:
+        """
+        Run the vector store insertion step for unstructured data.
+        
+        Returns:
+            Dictionary with insertion results
+        """
+        if not self.vector_store_available:
+            logger.error("❌ Vector store not available. Cannot perform unstructured data insertion.")
+            return {'successful': 0, 'failed': 0, 'total': 0}
+        
+        logger.info("🚀 Starting vector store insertion step...")
+        
+        try:
+            # Get unstructured data directory from environment
+            unstructured_dir = os.getenv('UNST_PARSED_DATA_DIR', 'unstructured_data')
+            
+            # Load and insert unstructured documents
+            success = self.vector_store.load_contextual_documents(documents_dir=unstructured_dir)
+            
+            logger.info("✅ Vector store insertion completed")
+            
+            # Return result in expected format
+            if success:
+                return {'successful': 1, 'failed': 0, 'total': 1}
+            else:
+                return {'successful': 0, 'failed': 1, 'total': 1}
+            
+        except Exception as e:
+            logger.error(f"❌ Error during vector store insertion: {e}")
+            return {'successful': 0, 'failed': 0, 'total': 0}
+    
     def run_complete_pipeline(self, skip_parsing: bool = False, skip_insertion: bool = False) -> dict:
         """
         Run the complete pipeline: parsing + database insertion.
@@ -89,8 +131,10 @@ class WellWisePipeline:
         results = {
             'parsing_success': False,
             'insertion_success': False,
+            'vector_store_success': False,
             'parsing_records': 0,
             'insertion_results': {'successful': 0, 'failed': 0, 'total': 0},
+            'vector_store_results': {'successful': 0, 'failed': 0, 'total': 0},
             'start_time': start_time,
             'end_time': None,
             'duration': None
@@ -112,10 +156,10 @@ class WellWisePipeline:
             logger.info("⏭️  Skipping parsing step (data already exists)")
             results['parsing_success'] = True
         
-        # Step 2: Database Insertion
+        # Step 2: Database Insertion (Structured Data)
         if not skip_insertion:
             logger.info("=" * 50)
-            logger.info("STEP 2: DATABASE INSERTION")
+            logger.info("STEP 2: STRUCTURED DATA INSERTION")
             logger.info("=" * 50)
             
             insertion_results = self.run_database_insertion()
@@ -123,10 +167,26 @@ class WellWisePipeline:
             results['insertion_success'] = insertion_results['successful'] > 0
             
             if insertion_results['successful'] == 0:
-                logger.error("❌ Pipeline failed at insertion step")
+                logger.error("❌ Pipeline failed at structured data insertion step")
         else:
-            logger.info("⏭️  Skipping insertion step")
+            logger.info("⏭️  Skipping structured data insertion step")
             results['insertion_success'] = True
+        
+        # Step 3: Vector Store Insertion (Unstructured Data)
+        if not skip_insertion:
+            logger.info("=" * 50)
+            logger.info("STEP 3: UNSTRUCTURED DATA INSERTION")
+            logger.info("=" * 50)
+            
+            vector_store_results = self.run_vector_store_insertion()
+            results['vector_store_results'] = vector_store_results
+            results['vector_store_success'] = vector_store_results['successful'] > 0
+            
+            if vector_store_results['successful'] == 0:
+                logger.error("❌ Pipeline failed at unstructured data insertion step")
+        else:
+            logger.info("⏭️  Skipping unstructured data insertion step")
+            results['vector_store_success'] = True
         
         # Calculate timing
         end_time = datetime.now()
@@ -157,11 +217,11 @@ class WellWisePipeline:
         else:
             logger.info("❌ Parsing: FAILED")
         
-        # Insertion results
+        # Structured data insertion results
         insertion_results = results['insertion_results']
         if results['insertion_success']:
-            logger.info("✅ Database Insertion: SUCCESS")
-            logger.info(f"📊 Insertion Results:")
+            logger.info("✅ Structured Data Insertion: SUCCESS")
+            logger.info(f"📊 Structured Data Results:")
             logger.info(f"   Total Records: {insertion_results['total']}")
             logger.info(f"   Successful: {insertion_results['successful']}")
             logger.info(f"   Failed: {insertion_results['failed']}")
@@ -170,10 +230,25 @@ class WellWisePipeline:
                 success_rate = (insertion_results['successful'] / insertion_results['total']) * 100
                 logger.info(f"   Success Rate: {success_rate:.1f}%")
         else:
-            logger.info("❌ Database Insertion: FAILED")
+            logger.info("❌ Structured Data Insertion: FAILED")
+        
+        # Unstructured data insertion results
+        vector_store_results = results['vector_store_results']
+        if results['vector_store_success']:
+            logger.info("✅ Unstructured Data Insertion: SUCCESS")
+            logger.info(f"📊 Unstructured Data Results:")
+            logger.info(f"   Total Documents: {vector_store_results['total']}")
+            logger.info(f"   Successful: {vector_store_results['successful']}")
+            logger.info(f"   Failed: {vector_store_results['failed']}")
+            
+            if vector_store_results['total'] > 0:
+                success_rate = (vector_store_results['successful'] / vector_store_results['total']) * 100
+                logger.info(f"   Success Rate: {success_rate:.1f}%")
+        else:
+            logger.info("❌ Unstructured Data Insertion: FAILED")
         
         # Overall result
-        if results['parsing_success'] and results['insertion_success']:
+        if results['parsing_success'] and results['insertion_success'] and results['vector_store_success']:
             logger.info("🎉 PIPELINE COMPLETED SUCCESSFULLY!")
         else:
             logger.info("⚠️  PIPELINE COMPLETED WITH ERRORS")

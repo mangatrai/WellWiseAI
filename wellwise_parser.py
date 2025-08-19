@@ -78,6 +78,7 @@ def get_parser_for_extension(ext: str):
         ".dlis": parse_dlis,
         ".las": parse_las, 
         ".csv": parse_csv_file,
+        ".dat": DatParser,  # Well picks parser
     }
     return parser_map.get(ext)
 
@@ -152,38 +153,73 @@ def process_single_file(file_path: str, parser_func, logger: logging.Logger,
             return True, f"Successfully processed CSV {file_path} → {len(output_files)} batch files", output_data
         
         # Regular handling for other file types
-        # Parse the file - pass logger to parser function
-        records = parser_func(file_path, logger)
-        
-        # Validate the output
-        if not validate_json_output(records):
-            return False, f"Invalid JSON structure for {file_path}", {}
-        
-        # Create output filename
-        if records and len(records) > 0:
-            well_id = records[0].get('well_id', '')
-            curve_name = records[0].get('curve_name', '')
-            original_name = os.path.basename(file_path)
-            output_filename = create_output_filename(well_id, curve_name, original_name)
+        # Check if parser is a class (like WellPicksParser) or function
+        if hasattr(parser_func, '__call__') and not hasattr(parser_func, 'parse'):
+            # Function-based parser (DLIS, LAS)
+            records = parser_func(file_path, logger)
+            
+            # Validate the output
+            if not validate_json_output(records):
+                return False, f"Invalid JSON structure for {file_path}", {}
+                
+            # Create output filename
+            if records and len(records) > 0:
+                well_id = records[0].get('well_id', '')
+                curve_name = records[0].get('curve_name', '')
+                original_name = os.path.basename(file_path)
+                output_filename = create_output_filename(well_id, curve_name, original_name)
+            else:
+                output_filename = f"{os.path.splitext(os.path.basename(file_path))[0]}.json"
+            
+            # Write to JSON file
+            output_path = os.path.join(config['parsed_directory'], output_filename)
+            
+            # Add metadata to the output
+            output_data = {
+                'metadata': {
+                    'processing_timestamp': datetime.utcnow().isoformat(),
+                    'source_file': file_path,
+                    'record_count': len(records),
+                    'parser_version': '1.0.0'
+                },
+                'records': records
+            }
+            
+            with open(output_path, 'w') as f:
+                json.dump(output_data, f, indent=2, default=str)
+                
         else:
-            output_filename = f"{os.path.splitext(os.path.basename(file_path))[0]}.json"
-        
-        # Write to JSON file
-        output_path = os.path.join(config['parsed_directory'], output_filename)
-        
-        # Add metadata to the output
-        output_data = {
-            'metadata': {
-                'processing_timestamp': datetime.utcnow().isoformat(),
-                'source_file': file_path,
-                'record_count': len(records),
-                'parser_version': '1.0.0'
-            },
-            'records': records
-        }
-        
-        with open(output_path, 'w') as f:
-            json.dump(output_data, f, indent=2, default=str)
+            # Class-based parser (DatParser)
+            parser_instance = parser_func(file_path)
+            result = parser_instance.parse()
+            
+            if "error" in result:
+                return False, f"Error parsing {file_path}: {result['error']}", {}
+            
+            # Extract records and metadata
+            records = result.get('records', [])
+            metadata = result.get('metadata', {})
+            
+            # Create output filename
+            if records and len(records) > 0:
+                well_id = records[0].get('well_id', '')
+                curve_name = records[0].get('curve_name', '')
+                original_name = os.path.basename(file_path)
+                output_filename = create_output_filename(well_id, curve_name, original_name)
+            else:
+                output_filename = f"{os.path.splitext(os.path.basename(file_path))[0]}.json"
+            
+            # Write to JSON file
+            output_path = os.path.join(config['parsed_directory'], output_filename)
+            
+            # Use the metadata from the parser result
+            output_data = {
+                'metadata': metadata,
+                'records': records
+            }
+            
+            with open(output_path, 'w') as f:
+                json.dump(output_data, f, indent=2, default=str)
         
         return True, f"Successfully processed {file_path} → {output_path}", output_data
         
@@ -266,6 +302,7 @@ from parsers.dlis import parse_dlis
 from parsers.las import parse_las
 from parsers.csv_parser import parse_csv_file
 from parsers.unstructured import UnstructuredParser
+from parsers.dat import DatParser
 
 def main():
     # Get configuration first
