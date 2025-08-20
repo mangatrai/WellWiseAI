@@ -321,6 +321,7 @@ from parsers.csv_parser import parse_csv_file
 from parsers.unstructured import UnstructuredParser
 from parsers.dat import DatParser
 from parsers.xlsx import parse_xlsx_file
+from parsers.survey import parse_survey_file, is_survey_file
 
 def main():
     # Get configuration first
@@ -378,6 +379,10 @@ def main():
                 else:
                     unmatched_files.append(file_path)
                     logger.warning(f"Structured file type configured but no parser available: {file_path} (extension: {ext})")
+            # Check for no-extension survey files
+            elif ext == "" and is_survey_file(file_path):
+                structured_files.append((file_path, parse_survey_file))
+                logger.debug(f"Survey file (no extension): {file_path}")
             # Handle unmatched files
             else:
                 unmatched_files.append(file_path)
