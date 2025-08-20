@@ -91,6 +91,8 @@ def get_parser_for_extension(ext: str):
         ".xlsx": parse_xlsx_file,  # Facies interpretation parser
         ".segy": SegyParser,  # Seismic data parser
         ".sgy": SegyParser,   # Seismic data parser (alternative extension)
+        ".lti": LtiParser,    # LTI format parser
+        ".LTI": LtiParser,    # LTI format parser (uppercase)
     }
     return parser_map.get(ext)
 
@@ -325,6 +327,7 @@ from parsers.dat import DatParser
 from parsers.xlsx import parse_xlsx_file
 from parsers.survey import parse_survey_file, is_survey_file
 from parsers.segy import SegyParser
+from parsers.lti import LtiParser
 
 def main():
     # Get configuration first
