@@ -57,6 +57,7 @@ def get_environment_config() -> Dict[str, str]:
         'unstructured_directory': os.getenv("UNST_PARSED_DATA_DIR", "unstructured_data"),
         'unstructured_file_types': os.getenv("UNSTRUCTURED_FILE_TYPES", "").split(",") if os.getenv("UNSTRUCTURED_FILE_TYPES") else [],
         'structured_file_types': os.getenv("STRUCTURED_FILE_TYPES", ".las,.dlis,.csv").split(","),
+        'dual_processing_file_types': os.getenv("DUAL_PROCESSING_FILE_TYPES", "").split(",") if os.getenv("DUAL_PROCESSING_FILE_TYPES") else [],
         'max_workers': int(os.getenv("MAX_WORKERS", "4")),
         'retry_attempts': int(os.getenv("RETRY_ATTEMPTS", "3")),
         'timeout': int(os.getenv("TIMEOUT_SECONDS", "300")),
@@ -71,6 +72,14 @@ def is_unstructured_file(file_path: str, config: Dict[str, str]) -> bool:
     
     file_ext = os.path.splitext(file_path)[1].lower()
     return file_ext in config['unstructured_file_types']
+
+def is_dual_processing_file(file_path: str, config: Dict[str, str]) -> bool:
+    """Check if a file should be processed as both structured and unstructured."""
+    if not config.get('dual_processing_file_types'):
+        return False
+    
+    file_ext = os.path.splitext(file_path)[1].lower()
+    return file_ext in config['dual_processing_file_types']
 
 def get_parser_for_extension(ext: str):
     """Get the appropriate parser function for a file extension."""
@@ -101,8 +110,8 @@ def validate_json_output(data: List[Dict]) -> bool:
     
     return True
 
-def create_output_filename(well_id: str, curve_name: str, original_name: str) -> str:
-    """Create meaningful output filename."""
+def create_output_filename(well_id: str, curve_name: str, original_name: str, processing_type: str = "structured") -> str:
+    """Create meaningful output filename with processing type suffix for dual processing."""
     # Clean the well_id and curve_name for filename safety
     safe_well_id = "".join(c for c in well_id if c.isalnum() or c in ('-', '_')).rstrip()
     safe_curve_name = "".join(c for c in curve_name if c.isalnum() or c in ('-', '_')).rstrip()
@@ -110,12 +119,19 @@ def create_output_filename(well_id: str, curve_name: str, original_name: str) ->
     # Use original name as fallback if well_id or curve_name are empty
     base_name = original_name.rsplit('.', 1)[0]
     
+    # Create base filename
     if safe_well_id and safe_curve_name:
-        return f"{safe_well_id}_{safe_curve_name}.json"
+        base_filename = f"{safe_well_id}_{safe_curve_name}"
     elif safe_well_id:
-        return f"{safe_well_id}_{base_name}.json"
+        base_filename = f"{safe_well_id}_{base_name}"
     else:
-        return f"{base_name}.json"
+        base_filename = base_name
+    
+    # Add processing type suffix for dual processing files
+    if processing_type == "unstructured":
+        return f"{base_filename}_unstructured.json"
+    else:
+        return f"{base_filename}.json"
 
 def process_single_file(file_path: str, parser_func, logger: logging.Logger, 
                        config: Dict[str, str]) -> Tuple[bool, str, Dict]:
@@ -167,7 +183,7 @@ def process_single_file(file_path: str, parser_func, logger: logging.Logger,
                 well_id = records[0].get('well_id', '')
                 curve_name = records[0].get('curve_name', '')
                 original_name = os.path.basename(file_path)
-                output_filename = create_output_filename(well_id, curve_name, original_name)
+                output_filename = create_output_filename(well_id, curve_name, original_name, "structured")
             else:
                 output_filename = f"{os.path.splitext(os.path.basename(file_path))[0]}.json"
             
@@ -205,7 +221,7 @@ def process_single_file(file_path: str, parser_func, logger: logging.Logger,
                 well_id = records[0].get('well_id', '')
                 curve_name = records[0].get('curve_name', '')
                 original_name = os.path.basename(file_path)
-                output_filename = create_output_filename(well_id, curve_name, original_name)
+                output_filename = create_output_filename(well_id, curve_name, original_name, "structured")
             else:
                 output_filename = f"{os.path.splitext(os.path.basename(file_path))[0]}.json"
             
@@ -335,8 +351,20 @@ def main():
             file_path = os.path.join(root, fname)
             ext = os.path.splitext(fname)[1].lower()
             
-            # Check if it's an unstructured file first
-            if is_unstructured_file(file_path, config):
+            # Check for dual processing files FIRST
+            if is_dual_processing_file(file_path, config):
+                # Add to BOTH lists
+                parser_func = get_parser_for_extension(ext)
+                if parser_func:
+                    structured_files.append((file_path, parser_func))
+                    unstructured_files.append(file_path)
+                    logger.debug(f"Dual processing file: {file_path}")
+                else:
+                    # If no structured parser available, treat as unstructured only
+                    unstructured_files.append(file_path)
+                    logger.warning(f"Dual processing file but no structured parser available: {file_path}")
+            # Then check if it's an unstructured file
+            elif is_unstructured_file(file_path, config):
                 unstructured_files.append(file_path)
                 logger.debug(f"Unstructured file: {file_path}")
             # Then check if it's a structured file using config
@@ -353,8 +381,15 @@ def main():
                 unmatched_files.append(file_path)
                 logger.warning(f"Unmatched file type (no parser available): {file_path} (extension: {ext})")
     
+    # Count dual processing files
+    dual_processing_files = []
+    for structured_file, _ in structured_files:
+        if structured_file in unstructured_files:
+            dual_processing_files.append(structured_file)
+    
     logger.info(f"Found {len(structured_files)} structured files to process")
     logger.info(f"Found {len(unstructured_files)} unstructured files to process")
+    logger.info(f"Found {len(dual_processing_files)} dual processing files")
     logger.info(f"Found {len(unmatched_files)} unmatched files (ignored)")
     
     if unmatched_files:
