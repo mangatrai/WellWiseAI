@@ -829,91 +829,7 @@ class SegyParser(BaseParser):
         
         return correlation_analysis
     
-    def gpt_advanced_seismic_analysis(self, seismic_data: Dict[str, Any], 
-                                    advanced_attributes: Dict[str, Any],
-                                    correlation_analysis: Dict[str, Any]) -> Dict[str, Any]:
-        """Use GPT for advanced seismic attribute analysis and interpretation"""
-        
-        print("=== GPT Advanced Seismic Analysis ===")
-        
-        if not self.openai_client:
-            return {'error': 'OpenAI client not available'}
-        
-        try:
-            # Prepare comprehensive data for GPT analysis
-            amplitude_stats = seismic_data.get('amplitude_statistics', {}).get('overall_statistics', {})
-            rms_analysis = advanced_attributes.get('rms_amplitude_maps', {})
-            statistical_attrs = advanced_attributes.get('statistical_attributes', {})
-            well_correlation = correlation_analysis.get('well_picks_correlation', {})
-            
-            # Create comprehensive prompt
-            prompt = f"""
-Perform advanced seismic attribute analysis and interpretation for this 3D seismic survey:
 
-SEISMIC DATA CHARACTERISTICS:
-- File size: {seismic_data.get('file_info', {}).get('file_size_mb', 0):.1f} MB
-- Traces analyzed: {seismic_data.get('amplitude_statistics', {}).get('trace_count_analyzed', 0)}
-- Sample interval: {seismic_data.get('header_info', {}).get('sample_interval', 0)} μs
-- Data format: {seismic_data.get('header_info', {}).get('data_format_description', 'Unknown')}
-
-ADVANCED SEISMIC ATTRIBUTES:
-RMS Amplitude Analysis:
-- Mean RMS: {rms_analysis.get('mean_rms', 0):,.0f}
-- RMS trend: {rms_analysis.get('rms_trend', 'Unknown')}
-- RMS variation coefficient: {rms_analysis.get('rms_variation_coefficient', 0):.3f}
-
-Statistical Attributes:
-- Amplitude entropy: {statistical_attrs.get('amplitude_entropy', 0):.3f}
-- Dynamic range: {statistical_attrs.get('dynamic_range', 0):,.0f}
-- Coefficient of variation: {statistical_attrs.get('coefficient_of_variation', 0):.3f}
-
-WELL CORRELATION DATA:
-- Wells with picks: {len(well_correlation)}
-- Key formations identified: {sum(len(w.get('key_surfaces', [])) for w in well_correlation.values())}
-
-Please provide:
-1. Advanced seismic attribute interpretation
-2. Reservoir characterization insights
-3. Structural and stratigraphic analysis
-4. Hydrocarbon potential assessment based on attributes
-5. Recommendations for further seismic processing
-6. Integration insights with well data
-7. Risk assessment and uncertainty analysis
-8. Specific recommendations for exploration decisions
-"""
-
-            # Call GPT for advanced analysis
-            response = self.openai_client.chat.completions.create(
-                model="gpt-4",
-                messages=[
-                    {"role": "system", "content": "You are an expert petroleum geologist and seismic interpreter specializing in advanced seismic attribute analysis, reservoir characterization, and well-seismic correlation. Provide detailed, professional analysis with specific insights for exploration decisions."},
-                    {"role": "user", "content": prompt}
-                ],
-                max_tokens=2000,
-                temperature=0.3
-            )
-            
-            advanced_analysis = {
-                'advanced_interpretation': response.choices[0].message.content,
-                'analysis_timestamp': datetime.now().isoformat(),
-                'model_used': 'gpt-4',
-                'analysis_type': 'advanced_seismic_attributes',
-                'data_summary': {
-                    'seismic_attributes': advanced_attributes,
-                    'well_correlation': correlation_analysis,
-                    'amplitude_statistics': amplitude_stats
-                }
-            }
-            
-            print("✅ GPT advanced seismic analysis completed")
-            print(f"✅ Analysis length: {len(advanced_analysis['advanced_interpretation'])} characters")
-            
-            return advanced_analysis
-            
-        except Exception as e:
-            self.logger.error(f"Error in GPT advanced analysis: {e}")
-            return {'error': str(e)}
-    
     def run_enhanced_analysis(self) -> Dict[str, Any]:
         """Run the complete enhanced analysis with well correlation and advanced attributes"""
         
@@ -938,9 +854,6 @@ Please provide:
         if well_data_available:
             correlation_analysis = self.perform_well_seismic_correlation(seismic_data)
         
-        # Phase 4: GPT advanced analysis
-        gpt_analysis = self.gpt_advanced_seismic_analysis(seismic_data, advanced_attributes, correlation_analysis)
-        
         # Combine all results
         enhanced_analysis = {
             'analysis_timestamp': datetime.now().isoformat(),
@@ -948,7 +861,6 @@ Please provide:
             'seismic_data': seismic_data,
             'advanced_attributes': advanced_attributes,
             'well_correlation': correlation_analysis,
-            'gpt_advanced_analysis': gpt_analysis,
             'processing_time_seconds': (datetime.now() - start_time).total_seconds()
         }
         
