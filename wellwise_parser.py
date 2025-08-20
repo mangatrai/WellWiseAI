@@ -88,6 +88,7 @@ def get_parser_for_extension(ext: str):
         ".las": parse_las, 
         ".csv": parse_csv_file,
         ".dat": DatParser,  # Well picks parser
+        ".xlsx": parse_xlsx_file,  # Facies interpretation parser
     }
     return parser_map.get(ext)
 
@@ -319,6 +320,7 @@ from parsers.las import parse_las
 from parsers.csv_parser import parse_csv_file
 from parsers.unstructured import UnstructuredParser
 from parsers.dat import DatParser
+from parsers.xlsx import parse_xlsx_file
 
 def main():
     # Get configuration first
