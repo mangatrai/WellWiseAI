@@ -89,6 +89,8 @@ def get_parser_for_extension(ext: str):
         ".csv": parse_csv_file,
         ".dat": DatParser,  # Well picks parser
         ".xlsx": parse_xlsx_file,  # Facies interpretation parser
+        ".segy": SegyParser,  # Seismic data parser
+        ".sgy": SegyParser,   # Seismic data parser (alternative extension)
     }
     return parser_map.get(ext)
 
@@ -322,6 +324,7 @@ from parsers.unstructured import UnstructuredParser
 from parsers.dat import DatParser
 from parsers.xlsx import parse_xlsx_file
 from parsers.survey import parse_survey_file, is_survey_file
+from parsers.segy import SegyParser
 
 def main():
     # Get configuration first
