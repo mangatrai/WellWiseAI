@@ -101,7 +101,13 @@ class LtiParser(BaseParser):
                     'header_info': self.header_info,
                     'curves': self.curves,
                     'data': self.data,
-                    'canonical_records': canonical_records,
+                    'records': canonical_records,  # Pipeline expects 'records' at top level
+                    'metadata': {
+                        'format': 'schlumberger_sfinx',
+                        'record_count': len(canonical_records),
+                        'curves_count': len(self.curves),
+                        'file_path': str(self.file_path)
+                    },
                     'record_count': len(canonical_records)
                 }
                 
