@@ -76,7 +76,8 @@ class SegyParser(BaseParser):
                     "file_type": 'segy',
                     "parser_name": self.__class__.__name__,
                     "processing_time": processing_time,
-                    "analysis_results": analysis_results
+                    "record_count": len(records),
+                    "sample_size": os.getenv('SEGY_SAMPLE_SIZE', '1000')
                 }
             }
             
