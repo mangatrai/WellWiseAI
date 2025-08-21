@@ -5,6 +5,7 @@ Incorporates well picks data and uses GPT for advanced seismic interpretation
 """
 
 import os
+import json
 import logging
 import numpy as np
 import pandas as pd
@@ -52,31 +53,183 @@ class SegyParser(BaseParser):
             
         return True
     
-    def parse(self) -> ParsedData:
-        """Parse SEG-Y file and return structured data"""
+    def parse(self) -> Dict[str, Any]:
+        """Parse SEG-Y file and return structured data in pipeline-compatible format"""
         start_time = time.time()
         
         try:
             if not self.can_parse():
-                return self.create_error_result("File cannot be parsed by SEG-Y parser")
+                return {"error": "File cannot be parsed by SEG-Y parser"}
             
             # Run enhanced analysis
             analysis_results = self.run_enhanced_analysis()
             
+            # Extract records from the analysis results
+            records = self._extract_canonical_records(analysis_results)
+            
             processing_time = time.time() - start_time
             
-            return ParsedData(
-                file_path=str(self.file_path),
-                file_type='segy',
-                parser_name=self.__class__.__name__,
-                metadata=self.get_file_info(),
-                data=analysis_results,
-                processing_time=processing_time
-            )
+            return {
+                "records": records,
+                "metadata": {
+                    "file_path": str(self.file_path),
+                    "file_type": 'segy',
+                    "parser_name": self.__class__.__name__,
+                    "processing_time": processing_time,
+                    "analysis_results": analysis_results
+                }
+            }
             
         except Exception as e:
             self.logger.error(f"Error parsing {self.file_path}: {e}")
-            return self.create_error_result(str(e))
+            return {"error": str(e)}
+    
+    def _extract_canonical_records(self, analysis_results: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Extract canonical records from SEGY analysis results"""
+        records = []
+        
+        # Get seismic data for use in all records
+        seismic_data = analysis_results.get('seismic_data', {})
+        
+        # Extract advanced seismic attributes using canonical fields
+        advanced_attributes = analysis_results.get('advanced_attributes', {})
+        if advanced_attributes:
+            # Create advanced attributes record using canonical fields
+            advanced_record = {
+                'well_id': f"segy_{self.file_path.stem}",
+                'record_type': 'seismic',
+                'curve_name': 'advanced_attributes',
+                'depth_start': 0.0,
+                'depth_end': float(seismic_data.get('header_info', {}).get('samples_per_trace', 850) * 
+                                 seismic_data.get('header_info', {}).get('sample_interval', 4000) / 1000.0),
+                'seismic_sample_rate': float(seismic_data.get('header_info', {}).get('sample_interval', 4000)),
+                'sample_interval': float(seismic_data.get('header_info', {}).get('sample_interval', 4000)),
+                'processing_date': analysis_results.get('analysis_timestamp', ''),
+                'processing_software': 'SegyParser',
+                'tool_type': 'advanced_attributes',
+                'service_company': 'WellWiseAI',
+                'version': '1.0',
+                'file_origin': str(self.file_path),
+                'qc_flag': True,
+                'remarks': f"Advanced seismic attributes extracted - RMS maps, instantaneous attributes, coherence analysis, frequency attributes, statistical attributes"
+            }
+            records.append(advanced_record)
+        
+        # Extract basic seismic statistics using canonical fields
+        seismic_data = analysis_results.get('seismic_data', {})
+        if 'amplitude_statistics' in seismic_data:
+            stats = seismic_data['amplitude_statistics']['overall_statistics']
+            
+            # Create comprehensive seismic summary record using canonical fields
+            seismic_summary = {
+                'well_id': f"segy_{self.file_path.stem}",
+                'record_type': 'seismic',
+                'curve_name': 'seismic_summary',
+                'depth_start': 0.0,
+                'depth_end': float(seismic_data.get('header_info', {}).get('samples_per_trace', 850) * 
+                                 seismic_data.get('header_info', {}).get('sample_interval', 4000) / 1000.0),
+                'sample_max': float(stats.get('max', 0.0)),
+                'sample_mean': float(stats.get('mean', 0.0)),
+                'sample_min': float(stats.get('min', 0.0)),
+                'sample_stddev': float(stats.get('std', 0.0)),
+                'num_samples': int(seismic_data.get('amplitude_statistics', {}).get('sample_count', 0)),
+                'seismic_trace_count': int(seismic_data.get('amplitude_statistics', {}).get('trace_count_analyzed', 0)),
+                'seismic_sample_rate': float(seismic_data.get('header_info', {}).get('sample_interval', 4000)),
+                'sample_interval': float(seismic_data.get('header_info', {}).get('sample_interval', 4000)),
+                'processing_date': analysis_results.get('analysis_timestamp', ''),
+                'processing_software': 'SegyParser',
+                'tool_type': 'seismic_summary',
+                'service_company': 'WellWiseAI',
+                'version': '1.0',
+                'file_origin': str(self.file_path),
+                'qc_flag': True,
+                'remarks': f"Overall seismic statistics - RMS: {stats.get('rms', 0.0):.3f}, Skewness: {stats.get('skewness', 0.0):.3f}, Kurtosis: {stats.get('kurtosis', 0.0):.3f}"
+            }
+            records.append(seismic_summary)
+        
+        # Extract frequency analysis results using canonical fields
+        if 'frequency_analysis' in seismic_data:
+            freq_data = seismic_data['frequency_analysis']
+            freq_stats = freq_data.get('frequency_statistics', {})
+            
+            if freq_stats:
+                frequency_record = {
+                    'well_id': f"segy_{self.file_path.stem}",
+                    'record_type': 'seismic',
+                    'curve_name': 'frequency_analysis',
+                    'depth_start': 0.0,
+                    'depth_end': float(seismic_data.get('header_info', {}).get('samples_per_trace', 850) * 
+                                     seismic_data.get('header_info', {}).get('sample_interval', 4000) / 1000.0),
+                    'seismic_sample_rate': float(seismic_data.get('header_info', {}).get('sample_interval', 4000)),
+                    'sample_interval': float(seismic_data.get('header_info', {}).get('sample_interval', 4000)),
+                    'processing_date': analysis_results.get('analysis_timestamp', ''),
+                    'processing_software': 'SegyParser',
+                    'tool_type': 'frequency_analysis',
+                    'service_company': 'WellWiseAI',
+                    'version': '1.0',
+                    'file_origin': str(self.file_path),
+                    'qc_flag': True,
+                    'remarks': f"Frequency analysis - Mean dominant: {freq_stats.get('mean_dominant_frequency', 0.0):.1f}Hz, Bandwidth: {freq_stats.get('frequency_bandwidth', 0.0):.1f}Hz"
+                }
+                records.append(frequency_record)
+        
+        # Extract individual trace records from sampled traces using canonical fields
+        trace_samples = seismic_data.get('trace_samples', [])
+        for trace_sample in trace_samples:
+            trace_num = trace_sample.get('trace_number', 0)
+            trace_position = trace_sample.get('trace_position', 0)
+            amplitudes = trace_sample.get('amplitudes', [])
+            
+            if amplitudes:
+                # Create a single comprehensive record for each trace using canonical fields
+                trace_record = {
+                    'well_id': f"segy_{self.file_path.stem}",
+                    'record_type': 'seismic',
+                    'curve_name': f'trace_{trace_num}',
+                    'depth_start': 0.0,
+                    'depth_end': float(len(amplitudes) * seismic_data.get('header_info', {}).get('sample_interval', 4000) / 1000.0),
+                    'sample_interval': float(seismic_data.get('header_info', {}).get('sample_interval', 4000)),
+                    'sample_max': float(max(amplitudes) if amplitudes else 0.0),
+                    'sample_mean': float(trace_sample.get('mean', 0.0)),
+                    'sample_min': float(min(amplitudes) if amplitudes else 0.0),
+                    'sample_stddev': float(trace_sample.get('std', 0.0)),
+                    'num_samples': len(amplitudes),
+                    'seismic_trace_count': trace_num,
+                    'seismic_sample_rate': float(seismic_data.get('header_info', {}).get('sample_interval', 4000)),
+                    'processing_date': analysis_results.get('analysis_timestamp', ''),
+                    'processing_software': 'SegyParser',
+                    'tool_type': 'seismic_trace',
+                    'service_company': 'WellWiseAI',
+                    'version': '1.0',
+                    'file_origin': str(self.file_path),
+                    'qc_flag': True,
+                    'remarks': f"Trace {trace_num} (position {trace_position}) - RMS: {trace_sample.get('rms', 0.0):.3f}, Samples: {len(amplitudes)}"
+                }
+                records.append(trace_record)
+        
+        return records
+    
+
+        
+        # Extract well correlation records if available
+        well_correlation = analysis_results.get('well_correlation', {})
+        for well_name, well_data in well_correlation.items():
+            if isinstance(well_data, dict) and 'surfaces' in well_data:
+                for surface in well_data['surfaces']:
+                    record = {
+                        'well_id': well_name,
+                        'depth_start': surface.get('tvd', 0.0),
+                        'depth_end': surface.get('tvd', 0.0) + 1.0,
+                        'curve_name': f'well_pick_{surface.get("surface_name", "unknown")}',
+                        'curve_value': 1.0,
+                        'record_type': 'well_pick',
+                        'data_source': 'segy_parser',
+                        'remarks': f"Well pick: {surface.get('surface_name', 'Unknown')}, MD={surface.get('md', 'N/A')}m, TVD={surface.get('tvd', 'N/A')}m",
+                        'qc_flag': True
+                    }
+                    records.append(record)
+        
+        return records
     
     def find_well_data_files(self):
         """Find well data files in the same directory as SEG-Y file and subdirectories"""
@@ -215,8 +368,9 @@ class SegyParser(BaseParser):
                     frequency_data = []
                     trace_samples = []
                     
-                    # Random sampling of 1000 traces for analysis (20x improvement over current 50)
-                    sample_count = min(1000, estimated_traces)
+                    # Random sampling of traces for analysis (configurable via environment)
+                    sample_size = int(os.getenv('SEGY_SAMPLE_SIZE', 1000))
+                    sample_count = min(sample_size, estimated_traces)
                     
                     # Generate random trace positions for better coverage
                     import random
@@ -937,10 +1091,11 @@ This 3D seismic survey contains comprehensive amplitude and frequency data suita
         )
         documents.append(seismic_overview)
         
-        # 2. Generate documents for individual seismic traces (sample first 1000 traces)
+        # 2. Generate documents for individual seismic traces (sample configurable number)
         trace_samples = seismic_data.get('trace_samples', [])
         if trace_samples:
-            for i, trace_sample in enumerate(trace_samples[:1000]):
+            sample_size = int(os.getenv('SEGY_SAMPLE_SIZE', 1000))
+            for i, trace_sample in enumerate(trace_samples[:sample_size]):
                 trace = trace_sample['amplitudes']
                 trace_doc = ContextualDocument(
                     document_type='seismic_trace',

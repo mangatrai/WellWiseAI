@@ -191,11 +191,11 @@ class XLSXParser:
             Please extract the following information in JSON format:
             1. field_name: The oil field name (likely "Volve" based on well naming)
             2. country: The country (likely "Norway" based on well naming)
-            3. formation_temp: Estimated temperature at depth (use 3°C/100m geothermal gradient)
-            4. formation_press: Estimated pressure at depth (use 10 MPa/km pressure gradient)
+            3. formation_temp: Estimated temperature at depth (use 3°C/100m geothermal gradient) - RETURN ONLY THE FINAL NUMBER, NO CALCULATIONS
+            4. formation_press: Estimated pressure at depth (use 10 MPa/km pressure gradient) - RETURN ONLY THE FINAL NUMBER, NO CALCULATIONS
             5. geological_summary: Brief geological interpretation (max 200 characters)
             
-            Return only valid JSON with these fields.
+            IMPORTANT: Return only valid JSON with final calculated values. Do not include any mathematical expressions, calculations, or reasoning in the JSON. Only return the final numeric results.
             """
             
             response = self.client.chat.completions.create(
@@ -210,6 +210,7 @@ class XLSXParser:
             
             # Parse LLM response
             llm_content = response.choices[0].message.content.strip()
+            #logger.debug(f"LLM response: {llm_content}")
             
             # Extract JSON from markdown code blocks if present
             if llm_content.startswith('```json'):
@@ -219,24 +220,29 @@ class XLSXParser:
                 # Remove generic code block formatting
                 llm_content = llm_content.replace('```', '').strip()
             
-            # Try to extract JSON from response
-            if llm_content.startswith('{') and llm_content.endswith('}'):
-                enhanced_data = json.loads(llm_content)
-                logger.debug(f"LLM enhancement successful for {record.get('well_id')} at {record.get('depth_start')}m")
-                
-                # Add geological context to remarks
-                if 'geological_summary' in enhanced_data:
-                    record['remarks'] += f", Geological Context: {enhanced_data['geological_summary']}"
-                
-                # Return only canonical fields
-                canonical_enhanced_data = {}
-                for field in ['field_name', 'country', 'formation_temp', 'formation_press']:
-                    if field in enhanced_data:
-                        canonical_enhanced_data[field] = enhanced_data[field]
-                
-                return canonical_enhanced_data
-            else:
-                logger.warning(f"LLM response not in JSON format: {llm_content[:100]}...")
+            # Try to extract JSON from response with better error handling
+            try:
+                if llm_content.startswith('{') and llm_content.endswith('}'):
+                    enhanced_data = json.loads(llm_content)
+                    logger.debug(f"LLM enhancement successful for {record.get('well_id')} at {record.get('depth_start')}m")
+                    
+                    # Add geological context to remarks
+                    if 'geological_summary' in enhanced_data:
+                        record['remarks'] += f", Geological Context: {enhanced_data['geological_summary']}"
+                    
+                    # Return only canonical fields
+                    canonical_enhanced_data = {}
+                    for field in ['field_name', 'country', 'formation_temp', 'formation_press']:
+                        if field in enhanced_data:
+                            canonical_enhanced_data[field] = enhanced_data[field]
+                    
+                    return canonical_enhanced_data
+                else:
+                    logger.error(f"LLM response not in JSON format: {llm_content[:100]}...")
+                    return None
+            except json.JSONDecodeError as e:
+                logger.error(f"JSON parsing failed for LLM response: {e}")
+                logger.debug(f"Raw LLM response: {llm_content}")
                 return None
                 
         except Exception as e:
@@ -286,12 +292,13 @@ class XLSXParser:
             return False
 
 
-def parse_xlsx_file(file_path: str) -> List[Dict[str, Any]]:
+def parse_xlsx_file(file_path: str, logger=None) -> List[Dict[str, Any]]:
     """
     Convenience function to parse an XLSX file.
     
     Args:
         file_path: Path to the XLSX file
+        logger: Optional logger instance
         
     Returns:
         List of dictionaries containing parsed data

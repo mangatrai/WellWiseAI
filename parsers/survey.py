@@ -310,11 +310,11 @@ class SurveyParser:
             Please extract the following information in JSON format:
             1. field_name: The oil field name (likely "{field_name}" if provided)
             2. country: The country (likely "Norway" based on company info)
-            3. formation_temp: Estimated temperature at depth (use 3°C/100m geothermal gradient)
-            4. formation_press: Estimated pressure at depth (use 10 MPa/km pressure gradient)
+            3. formation_temp: Estimated temperature at depth (use 3°C/100m geothermal gradient) - RETURN ONLY THE FINAL NUMBER, NO CALCULATIONS
+            4. formation_press: Estimated pressure at depth (use 10 MPa/km pressure gradient) - RETURN ONLY THE FINAL NUMBER, NO CALCULATIONS
             5. survey_summary: Brief survey interpretation (max 200 characters)
             
-            Return only valid JSON with these fields.
+            IMPORTANT: Return only valid JSON with final calculated values. Do not include any mathematical expressions, calculations, or reasoning in the JSON. Only return the final numeric results.
             """
             
             response = self.client.chat.completions.create(
@@ -336,24 +336,29 @@ class SurveyParser:
             elif llm_content.startswith('```'):
                 llm_content = llm_content.replace('```', '').strip()
             
-            # Try to extract JSON from response
-            if llm_content.startswith('{') and llm_content.endswith('}'):
-                enhanced_data = json.loads(llm_content)
-                logger.debug(f"LLM enhancement successful for {record.get('well_id')} at {record.get('plan_md')}m")
-                
-                # Add survey context to remarks
-                if 'survey_summary' in enhanced_data:
-                    record['remarks'] += f", Survey Context: {enhanced_data['survey_summary']}"
-                
-                # Return only canonical fields
-                canonical_enhanced_data = {}
-                for field in ['field_name', 'country', 'formation_temp', 'formation_press']:
-                    if field in enhanced_data:
-                        canonical_enhanced_data[field] = enhanced_data[field]
-                
-                return canonical_enhanced_data
-            else:
-                logger.warning(f"LLM response not in JSON format: {llm_content[:100]}...")
+            # Try to extract JSON from response with better error handling
+            try:
+                if llm_content.startswith('{') and llm_content.endswith('}'):
+                    enhanced_data = json.loads(llm_content)
+                    logger.debug(f"LLM enhancement successful for {record.get('well_id')} at {record.get('plan_md')}m")
+                    
+                    # Add survey context to remarks
+                    if 'survey_summary' in enhanced_data:
+                        record['remarks'] += f", Survey Context: {enhanced_data['survey_summary']}"
+                    
+                    # Return only canonical fields
+                    canonical_enhanced_data = {}
+                    for field in ['field_name', 'country', 'formation_temp', 'formation_press']:
+                        if field in enhanced_data:
+                            canonical_enhanced_data[field] = enhanced_data[field]
+                    
+                    return canonical_enhanced_data
+                else:
+                    logger.warning(f"LLM response not in JSON format: {llm_content[:100]}...")
+                    return None
+            except json.JSONDecodeError as e:
+                logger.warning(f"JSON parsing failed for LLM response: {e}")
+                logger.debug(f"Raw LLM response: {llm_content}")
                 return None
                 
         except Exception as e:
@@ -361,12 +366,13 @@ class SurveyParser:
             return None
 
 
-def parse_survey_file(file_path: str) -> List[Dict[str, Any]]:
+def parse_survey_file(file_path: str, logger=None) -> List[Dict[str, Any]]:
     """
     Convenience function to parse a survey file.
     
     Args:
         file_path: Path to the survey file
+        logger: Optional logger instance
         
     Returns:
         List of dictionaries containing parsed survey data

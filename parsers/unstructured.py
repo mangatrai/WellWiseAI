@@ -200,9 +200,14 @@ Return ONLY a valid JSON object with this exact structure:
             cleaned_response = cleaned_response.strip()
             self.logger.debug(f"Cleaned response: {cleaned_response}")
             
-            result = json.loads(cleaned_response)
-            self.logger.debug(f"LLM enhanced metadata: {result}")
-            return result
+            try:
+                result = json.loads(cleaned_response)
+                self.logger.debug(f"LLM enhanced metadata: {result}")
+                return result
+            except json.JSONDecodeError as e:
+                self.logger.warning(f"JSON parsing failed for LLM response: {e}")
+                self.logger.debug(f"Raw LLM response: {cleaned_response}")
+                return {}
             
         except Exception as e:
             self.logger.warning(f"LLM metadata enhancement failed: {e}")
