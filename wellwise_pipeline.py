@@ -7,16 +7,57 @@ import os
 import sys
 import logging
 from datetime import datetime
+from dotenv import load_dotenv
 from wellwise_parser import main as parse_data
 from db.insert_data import WellWiseDBInserter
 from db.vector_store import AstraVectorStoreSingle
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+# Load environment variables
+load_dotenv()
+
+# Configure unified logging
+def setup_unified_logging():
+    """Setup unified logging for the entire pipeline."""
+    log_level = os.getenv('LOG_LEVEL', 'INFO')
+    log_file = os.getenv('LOG_FILE_NAME', 'wellwise_pipeline.log')
+    
+    # Convert string log level to logging constant
+    level_map = {
+        'DEBUG': logging.DEBUG,
+        'INFO': logging.INFO,
+        'WARNING': logging.WARNING,
+        'ERROR': logging.ERROR
+    }
+    log_level_constant = level_map.get(log_level.upper(), logging.INFO)
+    
+    # Get logger for pipeline
+    logger = logging.getLogger(__name__)
+    logger.setLevel(log_level_constant)
+    
+    # Only add handlers if they don't already exist (avoid duplicates)
+    if not logger.handlers:
+        # Console handler
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(log_level_constant)
+        
+        # File handler - use environment variable
+        file_handler = logging.FileHandler(log_file)
+        file_handler.setLevel(logging.DEBUG)  # Always log everything to file
+        
+        # Formatter
+        formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        )
+        console_handler.setFormatter(formatter)
+        file_handler.setFormatter(formatter)
+        
+        logger.addHandler(console_handler)
+        logger.addHandler(file_handler)
+    
+    return logger
+
+# Setup unified logging
+logger = setup_unified_logging()
 
 class WellWisePipeline:
     """Complete pipeline for parsing and inserting oil and gas data."""

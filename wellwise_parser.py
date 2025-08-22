@@ -12,9 +12,10 @@ from tqdm import tqdm
 # Load env vars from .env
 load_dotenv()
 
-def setup_logging(log_level: str = "INFO") -> logging.Logger:
-    """Setup structured logging with proper formatting."""
-    logger = logging.getLogger('wellwise_parser')
+def setup_logging(log_level: str = None) -> logging.Logger:
+    """Setup logging using environment variables or fallback."""
+    if log_level is None:
+        log_level = os.getenv('LOG_LEVEL', 'INFO')
     
     # Convert string log level to logging constant
     level_map = {
@@ -24,28 +25,31 @@ def setup_logging(log_level: str = "INFO") -> logging.Logger:
         'ERROR': logging.ERROR
     }
     log_level_constant = level_map.get(log_level.upper(), logging.INFO)
+    
+    # Get logger for wellwise_parser
+    logger = logging.getLogger('wellwise_parser')
     logger.setLevel(log_level_constant)
     
-    # Clear existing handlers
-    logger.handlers.clear()
-    
-    # Console handler
-    console_handler = logging.StreamHandler()
-    console_handler.setLevel(log_level_constant)
-    
-    # File handler
-    file_handler = logging.FileHandler('wellwise_parser.log')
-    file_handler.setLevel(logging.DEBUG)  # Always log everything to file
-    
-    # Formatter
-    formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-    console_handler.setFormatter(formatter)
-    file_handler.setFormatter(formatter)
-    
-    logger.addHandler(console_handler)
-    logger.addHandler(file_handler)
+    # Only add handlers if they don't already exist (avoid duplicates)
+    if not logger.handlers:
+        # Console handler
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(log_level_constant)
+        
+        # File handler - use environment variable
+        log_file = os.getenv('LOG_FILE_NAME', 'wellwise_parser.log')
+        file_handler = logging.FileHandler(log_file)
+        file_handler.setLevel(logging.DEBUG)  # Always log everything to file
+        
+        # Formatter
+        formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        )
+        console_handler.setFormatter(formatter)
+        file_handler.setFormatter(formatter)
+        
+        logger.addHandler(console_handler)
+        logger.addHandler(file_handler)
     
     return logger
 
@@ -115,22 +119,26 @@ def validate_json_output(data: List[Dict]) -> bool:
     
     return True
 
-def create_output_filename(well_id: str, curve_name: str, original_name: str, processing_type: str = "structured") -> str:
-    """Create meaningful output filename with processing type suffix for dual processing."""
-    # Clean the well_id and curve_name for filename safety
-    safe_well_id = "".join(c for c in well_id if c.isalnum() or c in ('-', '_')).rstrip()
-    safe_curve_name = "".join(c for c in curve_name if c.isalnum() or c in ('-', '_')).rstrip()
+def get_file_extension(file_path: str) -> str:
+    """Get file extension without dot for filename generation."""
+    ext = os.path.splitext(file_path)[1].lower()
+    return ext[1:] if ext.startswith('.') else ext  # Remove leading dot
+
+def create_output_filename(original_name: str, parser_type: str = "", processing_type: str = "structured") -> str:
+    """Create unique output filename with parser type and timestamp."""
+    from datetime import datetime
     
-    # Use original name as fallback if well_id or curve_name are empty
+    # Get base name without extension
     base_name = original_name.rsplit('.', 1)[0]
     
+    # Get current timestamp in ddMMyyHHmmssS format with microseconds for uniqueness
+    timestamp = datetime.now().strftime("%d%m%y%H%M%S%f")  # Include microseconds for uniqueness
+    
     # Create base filename
-    if safe_well_id and safe_curve_name:
-        base_filename = f"{safe_well_id}_{safe_curve_name}"
-    elif safe_well_id:
-        base_filename = f"{safe_well_id}_{base_name}"
+    if parser_type:
+        base_filename = f"{base_name}_{parser_type}_{timestamp}"
     else:
-        base_filename = base_name
+        base_filename = f"{base_name}_{timestamp}"
     
     # Add processing type suffix for dual processing files
     if processing_type == "unstructured":
@@ -184,13 +192,9 @@ def process_single_file(file_path: str, parser_func, logger: logging.Logger,
                 return False, f"Invalid JSON structure for {file_path}", {}
                 
             # Create output filename
-            if records and len(records) > 0:
-                well_id = records[0].get('well_id', '')
-                curve_name = records[0].get('curve_name', '')
-                original_name = os.path.basename(file_path)
-                output_filename = create_output_filename(well_id, curve_name, original_name, "structured")
-            else:
-                output_filename = f"{os.path.splitext(os.path.basename(file_path))[0]}.json"
+            original_name = os.path.basename(file_path)
+            file_ext = get_file_extension(file_path)
+            output_filename = create_output_filename(original_name, file_ext, "structured")
             
             # Write to JSON file
             output_path = os.path.join(config['parsed_directory'], output_filename)
@@ -222,13 +226,9 @@ def process_single_file(file_path: str, parser_func, logger: logging.Logger,
             metadata = result.get('metadata', {})
             
             # Create output filename
-            if records and len(records) > 0:
-                well_id = records[0].get('well_id', '')
-                curve_name = records[0].get('curve_name', '')
-                original_name = os.path.basename(file_path)
-                output_filename = create_output_filename(well_id, curve_name, original_name, "structured")
-            else:
-                output_filename = f"{os.path.splitext(os.path.basename(file_path))[0]}.json"
+            original_name = os.path.basename(file_path)
+            file_ext = get_file_extension(file_path)
+            output_filename = create_output_filename(original_name, file_ext, "structured")
             
             # Write to JSON file
             output_path = os.path.join(config['parsed_directory'], output_filename)
@@ -333,8 +333,8 @@ def main():
     # Get configuration first
     config = get_environment_config()
     
-    # Setup logging with environment log level
-    logger = setup_logging(config['log_level'])
+    # Setup logging using environment variables
+    logger = setup_logging()
     logger.info("Starting WellWise parser")
     logger.info(f"Configuration: {config}")
     

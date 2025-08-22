@@ -251,7 +251,7 @@ class LtiParser(BaseParser):
     def map_curve_to_canonical(self, mnemonic: str) -> str:
         """Map LTI curve mnemonic to canonical field name"""
         mapping = {
-            'GR': 'gamma_ray',  # Gamma Ray
+            'GR': 'remarks',  # Gamma Ray goes to remarks
             'NPHI': 'neutron_porosity',  # Neutron Porosity
             'RHOB': 'bulk_density',  # Bulk Density
             'PHIF': 'porosity',  # Formation Porosity
@@ -549,6 +549,9 @@ class LtiParser(BaseParser):
                         depth = depth_point['depth']
                         curve_value = depth_point['values'].get(mnemonic, 0.0)
                         
+                        # Sanitize description to prevent JSON corruption
+                        sanitized_description = description.replace('\x00', '').replace('\u0000', '').strip()
+                        
                         # Create base record
                         record = {
                             # Required fields
@@ -574,7 +577,7 @@ class LtiParser(BaseParser):
                             'block_name': '15/9',
                             
                             # Remarks with curve information
-                            'remarks': f"LTI Curve: {mnemonic}, Units: {units}, Description: {description}, Depth: {depth}m"
+                            'remarks': f"LTI Curve: {mnemonic}, Units: {units}, Description: {sanitized_description}, Depth: {depth}m"
                         }
                         
                         # Add curve-specific data based on canonical field mapping
@@ -586,6 +589,9 @@ class LtiParser(BaseParser):
                         
                         canonical_records.append(record)
                 else:
+                    # Sanitize description to prevent JSON corruption
+                    sanitized_description = description.replace('\x00', '').replace('\u0000', '').strip()
+                    
                     # Fallback: create one record per curve (old behavior)
                     record = {
                         # Required fields
@@ -611,7 +617,7 @@ class LtiParser(BaseParser):
                         'block_name': '15/9',
                         
                         # Remarks with curve information
-                        'remarks': f"LTI Curve: {mnemonic}, Units: {units}, Description: {description}"
+                        'remarks': f"LTI Curve: {mnemonic}, Units: {units}, Description: {sanitized_description}"
                     }
                 
                 # Add curve-specific data based on canonical field mapping
