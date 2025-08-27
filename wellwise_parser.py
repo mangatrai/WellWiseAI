@@ -258,7 +258,9 @@ def process_unstructured_file(file_path: str, logger: logging.Logger,
     """
     try:
         # Create UnstructuredParser instance with configuration
-        parser = UnstructuredParser(file_path, config['unstructured_file_types'])
+        # Include dual processing file types for unstructured processing
+        supported_extensions = config['unstructured_file_types'] + config['dual_processing_file_types']
+        parser = UnstructuredParser(file_path, supported_extensions)
         
         # Check if parser can handle this file
         if not parser.can_parse():
