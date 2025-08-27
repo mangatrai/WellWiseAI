@@ -95,11 +95,14 @@ class SegyParser(BaseParser):
         advanced_attributes = analysis_results.get('advanced_attributes', {})
         if advanced_attributes:
             # Create advanced attributes record using canonical fields
+            survey_id = seismic_data.get('survey_id', f"segy_{self.file_path.stem}")
+            survey_info = seismic_data.get('survey_info', {})
+            
             advanced_record = {
-                'well_id': f"segy_{self.file_path.stem}",
+                'well_id': survey_id,
                 'record_type': 'seismic',
                 'curve_name': 'advanced_attributes',
-                'depth_start': 0.0,
+                'depth_start': 0.1,  # Will be overridden by trace-specific data
                 'depth_end': float(seismic_data.get('header_info', {}).get('samples_per_trace', 850) * 
                                  seismic_data.get('header_info', {}).get('sample_interval', 4000) / 1000.0),
                 'seismic_sample_rate': float(seismic_data.get('header_info', {}).get('sample_interval', 4000)),
@@ -111,6 +114,8 @@ class SegyParser(BaseParser):
                 'version': '1.0',
                 'file_origin': str(self.file_path).replace('\x00', '').replace('\u0000', '').strip(),
                 'qc_flag': True,
+                'field_name': survey_info.get('field_name'),
+                'country': survey_info.get('country'),
                 'remarks': f"Advanced seismic attributes extracted - RMS maps, instantaneous attributes, coherence analysis, frequency attributes, statistical attributes"
             }
             records.append(advanced_record)
@@ -122,10 +127,10 @@ class SegyParser(BaseParser):
             
             # Create comprehensive seismic summary record using canonical fields
             seismic_summary = {
-                'well_id': f"segy_{self.file_path.stem}",
+                'well_id': survey_id,
                 'record_type': 'seismic',
                 'curve_name': 'seismic_summary',
-                'depth_start': 0.0,
+                'depth_start': 0.1,
                 'depth_end': float(seismic_data.get('header_info', {}).get('samples_per_trace', 850) * 
                                  seismic_data.get('header_info', {}).get('sample_interval', 4000) / 1000.0),
                 'sample_max': float(stats.get('max', 0.0)),
@@ -154,10 +159,10 @@ class SegyParser(BaseParser):
             
             if freq_stats:
                 frequency_record = {
-                    'well_id': f"segy_{self.file_path.stem}",
+                    'well_id': survey_id,
                     'record_type': 'seismic',
                     'curve_name': 'frequency_analysis',
-                    'depth_start': 0.0,
+                    'depth_start': 0.1,
                     'depth_end': float(seismic_data.get('header_info', {}).get('samples_per_trace', 850) * 
                                      seismic_data.get('header_info', {}).get('sample_interval', 4000) / 1000.0),
                     'seismic_sample_rate': float(seismic_data.get('header_info', {}).get('sample_interval', 4000)),
@@ -182,11 +187,23 @@ class SegyParser(BaseParser):
             
             if amplitudes:
                 # Create a single comprehensive record for each trace using canonical fields
+                survey_id = seismic_data.get('survey_id', f"segy_{self.file_path.stem}")
+                survey_info = seismic_data.get('survey_info', {})
+                
+                # Use trace header information if available, otherwise defaults
+                depth_start = trace_sample.get('depth_start', 0.1)
+                seismic_inline = trace_sample.get('seismic_inline', 0)
+                seismic_xline = trace_sample.get('seismic_xline', 0)
+                latitude = trace_sample.get('latitude')
+                longitude = trace_sample.get('longitude')
+                elevation = trace_sample.get('elevation')
+                null_count = trace_sample.get('null_count', 0)
+                
                 trace_record = {
-                    'well_id': f"segy_{self.file_path.stem}",
+                    'well_id': survey_id,
                     'record_type': 'seismic',
                     'curve_name': f'trace_{trace_num}',
-                    'depth_start': 0.0,
+                    'depth_start': depth_start,
                     'depth_end': float(len(amplitudes) * seismic_data.get('header_info', {}).get('sample_interval', 4000) / 1000.0),
                     'sample_interval': float(seismic_data.get('header_info', {}).get('sample_interval', 4000)),
                     'sample_max': float(max(amplitudes) if amplitudes else 0.0),
@@ -194,22 +211,26 @@ class SegyParser(BaseParser):
                     'sample_min': float(min(amplitudes) if amplitudes else 0.0),
                     'sample_stddev': float(trace_sample.get('std', 0.0)),
                     'num_samples': len(amplitudes),
+                    'null_count': null_count,
                     'seismic_trace_count': trace_num,
+                    'seismic_inline': seismic_inline,
+                    'seismic_xline': seismic_xline,
                     'seismic_sample_rate': float(seismic_data.get('header_info', {}).get('sample_interval', 4000)),
                     'processing_date': analysis_results.get('analysis_timestamp', ''),
                     'processing_software': 'SegyParser',
-                                    'tool_type': 'seismic_trace',
-                'service_company': 'WellWiseAI',
-                'version': '1.0',
-                'file_origin': str(self.file_path).replace('\x00', '').replace('\u0000', '').strip(),
-                'qc_flag': True,
+                    'tool_type': 'seismic_trace',
+                    'service_company': 'WellWiseAI',
+                    'version': '1.0',
+                    'file_origin': str(self.file_path).replace('\x00', '').replace('\u0000', '').strip(),
+                    'qc_flag': True,
+                    'field_name': survey_info.get('field_name'),
+                    'country': survey_info.get('country'),
+                    'latitude': latitude,
+                    'longitude': longitude,
+                    'elevation': elevation,
                     'remarks': f"Trace {trace_num} (position {trace_position}) - RMS: {trace_sample.get('rms', 0.0):.3f}, Samples: {len(amplitudes)}"
                 }
                 records.append(trace_record)
-        
-        return records
-    
-
         
         # Extract well correlation records if available
         well_correlation = analysis_results.get('well_correlation', {})
@@ -218,8 +239,8 @@ class SegyParser(BaseParser):
                 for surface in well_data['surfaces']:
                     record = {
                         'well_id': well_name,
-                        'depth_start': surface.get('tvd', 0.0),
-                        'depth_end': surface.get('tvd', 0.0) + 1.0,
+                        'depth_start': surface.get('tvd', 0.1),
+                        'depth_end': surface.get('tvd', 0.1) + 1.0,
                         'curve_name': f'well_pick_{surface.get("surface_name", "unknown")}',
                         'curve_value': 1.0,
                         'record_type': 'well_pick',
@@ -338,6 +359,14 @@ class SegyParser(BaseParser):
                 text_header = f.read(3200)
                 binary_header = f.read(400)
                 
+                # Extract survey information from text header
+                survey_info = self._extract_survey_info_from_text_header(text_header)
+                seismic_data['survey_info'] = survey_info
+                
+                # Generate meaningful survey ID
+                survey_id = self._generate_survey_id(self.file_path.name, survey_info)
+                seismic_data['survey_id'] = survey_id
+                
                 if len(binary_header) >= 400:
                     # Extract header information
                     sample_interval = int.from_bytes(binary_header[16:18], byteorder='big')
@@ -383,18 +412,25 @@ class SegyParser(BaseParser):
                     f.seek(header_size)
                     
                     for trace_idx, trace_num in enumerate(trace_positions):
-                        # Skip trace header
-                        f.seek(header_size + trace_num * total_trace_size + trace_header_size)
+                        # Read trace header
+                        f.seek(header_size + trace_num * total_trace_size)
+                        trace_header = f.read(trace_header_size)
+                        
+                        # Extract trace header information
+                        trace_header_info = self._extract_trace_header_info(trace_header)
                         
                         # Read trace data
                         trace_data = f.read(trace_data_size)
                         if len(trace_data) == trace_data_size:
                             # Convert to amplitude values
                             amplitudes = []
+                            null_count = 0
                             for i in range(0, len(trace_data), 4):
                                 if i + 4 <= len(trace_data):
                                     value = struct.unpack('>f', trace_data[i:i+4])[0]
                                     amplitudes.append(value)
+                                    if value == 0.0:
+                                        null_count += 1
                             
                             if amplitudes:
                                 trace_sample = {
@@ -403,7 +439,10 @@ class SegyParser(BaseParser):
                                     'amplitudes': amplitudes,
                                     'rms': np.sqrt(np.mean(np.array(amplitudes)**2)),
                                     'mean': np.mean(amplitudes),
-                                    'std': np.std(amplitudes)
+                                    'std': np.std(amplitudes),
+                                    'null_count': null_count,
+                                    # Add trace header information
+                                    **trace_header_info
                                 }
                                 trace_samples.append(trace_sample)
                                 amplitude_values.extend(amplitudes)
@@ -1631,7 +1670,7 @@ This enhanced analysis provides comprehensive seismic interpretation suitable fo
             'well_id': well_id,
             'record_type': 'seismic',
             'curve_name': 'seismic_survey_metadata',
-            'depth_start': 0.0,
+            'depth_start': 0.1,
             'depth_end': total_time_ms,  # Total seismic time window
             
             # Seismic-specific fields
@@ -1861,7 +1900,7 @@ This enhanced analysis provides comprehensive seismic interpretation suitable fo
             'well_id': well_id,
             'record_type': 'seismic',
             'curve_name': 'amplitude_statistics',
-            'depth_start': 0.0,
+            'depth_start': 0.1,
             
             # Statistical fields
             'sample_mean': overall_stats.get('mean', 0.0),
@@ -1905,7 +1944,7 @@ This enhanced analysis provides comprehensive seismic interpretation suitable fo
                 'well_id': well_id,
                 'record_type': 'seismic',
                 'curve_name': 'time_depth_correlation',
-                'depth_start': 0.0,
+                'depth_start': 0.1,
                 
                 # Metadata fields
                 'file_origin': f"segy_parser:{self.file_path.name}".replace('\x00', '').replace('\u0000', '').strip(),
@@ -1934,7 +1973,7 @@ This enhanced analysis provides comprehensive seismic interpretation suitable fo
                     'well_id': well_id,
                     'record_type': 'seismic',
                     'curve_name': f'well_pick_{well_name}_{surface.get("surface_name", "unknown")}',
-                    'depth_start': surface.get('tvd', 0.0),
+                    'depth_start': surface.get('tvd', 0.1),
                     
                     # Metadata fields
                     'file_origin': f"segy_parser:{self.file_path.name}".replace('\x00', '').replace('\u0000', '').strip(),
@@ -1979,6 +2018,145 @@ This enhanced analysis provides comprehensive seismic interpretation suitable fo
             return 0.0
         prob = hist / np.sum(hist)
         return -np.sum(prob * np.log2(prob))
+
+    def _extract_trace_header_info(self, trace_header_bytes: bytes) -> Dict[str, Any]:
+        """
+        Extract key information from SEGY trace header (240 bytes).
+        
+        Args:
+            trace_header_bytes: 240-byte trace header
+            
+        Returns:
+            Dictionary with extracted trace header information
+        """
+        if len(trace_header_bytes) < 240:
+            return {}
+        
+        try:
+            # Extract key fields using SEGY standard byte positions
+            trace_info = {}
+            
+            # CDP ensemble number (bytes 20-23) - seismic_inline
+            cdp_ensemble = int.from_bytes(trace_header_bytes[20:24], byteorder='big')
+            if cdp_ensemble > 0:
+                trace_info['seismic_inline'] = cdp_ensemble
+            
+            # Trace number within CDP ensemble (bytes 24-27) - seismic_xline  
+            trace_in_cdp = int.from_bytes(trace_header_bytes[24:28], byteorder='big')
+            if trace_in_cdp > 0:
+                trace_info['seismic_xline'] = trace_in_cdp
+            
+            # Source depth below surface (bytes 56-59) - depth_start
+            source_depth = int.from_bytes(trace_header_bytes[56:60], byteorder='big')
+            if source_depth > 0:
+                trace_info['depth_start'] = float(source_depth)
+            
+            # Receiver group elevation (bytes 48-51) - elevation
+            receiver_elevation = int.from_bytes(trace_header_bytes[48:52], byteorder='big')
+            if receiver_elevation != 0:
+                trace_info['elevation'] = float(receiver_elevation)
+            
+            # Source coordinates (bytes 84-91) - latitude/longitude
+            source_x = int.from_bytes(trace_header_bytes[84:88], byteorder='big')
+            source_y = int.from_bytes(trace_header_bytes[88:92], byteorder='big')
+            if source_x != 0 and source_y != 0:
+                trace_info['longitude'] = float(source_x)
+                trace_info['latitude'] = float(source_y)
+            
+            # Year data recorded (bytes 236-239) - acquisition_date
+            year_recorded = int.from_bytes(trace_header_bytes[236:240], byteorder='big')
+            if year_recorded > 1900 and year_recorded < 2100:
+                trace_info['acquisition_year'] = year_recorded
+            
+            return trace_info
+            
+        except Exception as e:
+            self.logger.warning(f"Error parsing trace header: {e}")
+            return {}
+
+    def _extract_survey_info_from_text_header(self, text_header: bytes) -> Dict[str, str]:
+        """
+        Extract survey information from SEGY text header (3200 bytes).
+        
+        Args:
+            text_header: 3200-byte text header
+            
+        Returns:
+            Dictionary with extracted survey information
+        """
+        survey_info = {}
+        
+        try:
+            # Convert bytes to string, handling encoding issues
+            text_str = text_header.decode('ascii', errors='ignore')
+            
+            # Look for common patterns in text header
+            lines = text_str.split('\n')
+            
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    continue
+                
+                # Look for field/survey names
+                if any(keyword in line.upper() for keyword in ['FIELD', 'SURVEY', 'PROJECT', 'AREA']):
+                    # Extract potential field name
+                    words = line.split()
+                    for word in words:
+                        if len(word) > 3 and word.isalnum():
+                            survey_info['field_name'] = word
+                            break
+                
+                # Look for country information
+                if any(country in line.upper() for country in ['NORWAY', 'UK', 'USA', 'CANADA']):
+                    survey_info['country'] = line.split()[0]
+            
+            return survey_info
+            
+        except Exception as e:
+            self.logger.warning(f"Error parsing text header: {e}")
+            return {}
+
+    def _generate_survey_id(self, filename: str, survey_info: Dict[str, str]) -> str:
+        """
+        Generate meaningful survey ID from filename and survey info.
+        
+        Args:
+            filename: SEGY filename
+            survey_info: Extracted survey information
+            
+        Returns:
+            Survey identifier
+        """
+        # Try to extract meaningful parts from filename
+        name_parts = filename.replace('.segy', '').replace('.sgy', '').split('_')
+        
+        # Look for survey identifiers
+        survey_id = None
+        
+        # Check for ST pattern (common in seismic surveys)
+        for part in name_parts:
+            if part.startswith('ST') and len(part) > 4:
+                survey_id = f"{part}_3D_Survey"
+                break
+        
+        # Check for field name
+        if not survey_id and survey_info.get('field_name'):
+            survey_id = f"{survey_info['field_name']}_3D_Survey"
+        
+        # Fallback to simplified filename
+        if not survey_id:
+            # Take first meaningful part of filename
+            for part in name_parts:
+                if len(part) > 2 and part.isalnum():
+                    survey_id = f"{part}_3D_Survey"
+                    break
+        
+        # Final fallback
+        if not survey_id:
+            survey_id = "SEGY_3D_Survey"
+        
+        return survey_id
 
 def main():
     """Main function to test the enhanced SEG-Y parser"""
