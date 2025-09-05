@@ -190,7 +190,7 @@ Return only valid JSON, no explanations."""
             response = self.openai_client.chat.completions.create(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
-                max_tokens=300,
+                max_tokens=500,
                 temperature=0,
                 response_format={"type": "json_object"}
             )

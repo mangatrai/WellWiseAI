@@ -205,7 +205,7 @@ class XLSXParser:
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0,
-                max_tokens=500,
+                max_tokens=600,
                 response_format={"type": "json_object"}
             )
             

@@ -173,15 +173,17 @@ Return ONLY a valid JSON object with this exact structure:
         "formations": ["formation", "names"],
         "field": "field name or null"
     }},
-    "depth_references": ["list", "of", "depth", "values"],
+    "depth_references": ["max 10 most important depth values only"],
     "curve_names": ["list", "of", "log", "curve", "names"]
 }}
+
+IMPORTANT: Limit depth_references to maximum 10 values. Do not include all depth values.
 """
             
             response = self.openai_client.chat.completions.create(
                 model=model,
                 messages=[{"role": "user", "content": prompt}],
-                max_tokens=500,
+                max_tokens=800,
                 temperature=0,
                 response_format={"type": "json_object"}
             )
