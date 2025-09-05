@@ -182,31 +182,20 @@ Return ONLY a valid JSON object with this exact structure:
                 model=model,
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=500,
-                temperature=0.1
+                temperature=0,
+                response_format={"type": "json_object"}
             )
             
             llm_response = response.choices[0].message.content
             self.logger.debug(f"Raw LLM response: {llm_response}")
             
-            # Clean up the response - remove markdown code blocks if present
-            cleaned_response = llm_response.strip()
-            if cleaned_response.startswith('```json'):
-                cleaned_response = cleaned_response[7:]  # Remove ```json
-            if cleaned_response.startswith('```'):
-                cleaned_response = cleaned_response[3:]  # Remove ```
-            if cleaned_response.endswith('```'):
-                cleaned_response = cleaned_response[:-3]  # Remove ```
-            
-            cleaned_response = cleaned_response.strip()
-            self.logger.debug(f"Cleaned response: {cleaned_response}")
-            
             try:
-                result = json.loads(cleaned_response)
+                result = json.loads(llm_response)
                 self.logger.debug(f"LLM enhanced metadata: {result}")
                 return result
             except json.JSONDecodeError as e:
                 self.logger.warning(f"JSON parsing failed for LLM response: {e}")
-                self.logger.debug(f"Raw LLM response: {cleaned_response}")
+                self.logger.debug(f"Raw LLM response: {llm_response}")
                 return {}
             
         except Exception as e:

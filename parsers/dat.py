@@ -191,40 +191,18 @@ Return only valid JSON, no explanations."""
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=300,
-                temperature=0.1
+                temperature=0,
+                response_format={"type": "json_object"}
             )
             
             llm_response = response.choices[0].message.content.strip()
             
-            # Clean up response (remove markdown code blocks if present)
-            # Handle ```json ... ``` format
-            if llm_response.startswith('```json'):
-                llm_response = llm_response[7:]
-            elif llm_response.startswith('```'):
-                llm_response = llm_response[3:]
-            
-            if llm_response.endswith('```'):
-                llm_response = llm_response[:-3]
-            
-            # Clean up any trailing commas or invalid JSON
-            llm_response = llm_response.strip()
-            
-            # Try to fix common JSON issues
+            # Try to parse JSON directly
             try:
                 enhanced_fields = json.loads(llm_response)
             except json.JSONDecodeError as e:
-                self.logger.warning(f"JSON parsing failed, trying to fix: {e}")
-                # Try to extract valid JSON by finding the first { and last }
-                start = llm_response.find('{')
-                end = llm_response.rfind('}')
-                if start != -1 and end != -1:
-                    try:
-                        enhanced_fields = json.loads(llm_response[start:end+1])
-                    except:
-                        self.logger.warning(f"Could not fix JSON for {record.get('well_id', 'unknown')}")
-                        return record
-                else:
-                    return record
+                self.logger.warning(f"JSON parsing failed for {record.get('well_id', 'unknown')}: {e}")
+                return record
             
             # Filter out non-canonical fields and merge enhanced fields with original record
             canonical_fields = {

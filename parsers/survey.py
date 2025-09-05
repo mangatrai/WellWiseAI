@@ -323,39 +323,30 @@ class SurveyParser:
                     {"role": "system", "content": "You are a well survey expert. Extract survey context and return only valid JSON."},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.1,
-                max_tokens=500
+                temperature=0,
+                max_tokens=500,
+                response_format={"type": "json_object"}
             )
             
             # Parse LLM response
             llm_content = response.choices[0].message.content.strip()
             
-            # Extract JSON from markdown code blocks if present
-            if llm_content.startswith('```json'):
-                llm_content = llm_content.replace('```json', '').replace('```', '').strip()
-            elif llm_content.startswith('```'):
-                llm_content = llm_content.replace('```', '').strip()
-            
             # Try to extract JSON from response with better error handling
             try:
-                if llm_content.startswith('{') and llm_content.endswith('}'):
-                    enhanced_data = json.loads(llm_content)
-                    logger.debug(f"LLM enhancement successful for {record.get('well_id')} at {record.get('plan_md')}m")
-                    
-                    # Add survey context to remarks
-                    if 'survey_summary' in enhanced_data:
-                        record['remarks'] += f", Survey Context: {enhanced_data['survey_summary']}"
-                    
-                    # Return only canonical fields
-                    canonical_enhanced_data = {}
-                    for field in ['field_name', 'country', 'formation_temp', 'formation_press']:
-                        if field in enhanced_data:
-                            canonical_enhanced_data[field] = enhanced_data[field]
-                    
-                    return canonical_enhanced_data
-                else:
-                    logger.warning(f"LLM response not in JSON format: {llm_content[:100]}...")
-                    return None
+                enhanced_data = json.loads(llm_content)
+                logger.debug(f"LLM enhancement successful for {record.get('well_id')} at {record.get('plan_md')}m")
+                
+                # Add survey context to remarks
+                if 'survey_summary' in enhanced_data:
+                    record['remarks'] += f", Survey Context: {enhanced_data['survey_summary']}"
+                
+                # Return only canonical fields
+                canonical_enhanced_data = {}
+                for field in ['field_name', 'country', 'formation_temp', 'formation_press']:
+                    if field in enhanced_data:
+                        canonical_enhanced_data[field] = enhanced_data[field]
+                
+                return canonical_enhanced_data
             except json.JSONDecodeError as e:
                 logger.warning(f"JSON parsing failed for LLM response: {e}")
                 logger.debug(f"Raw LLM response: {llm_content}")
