@@ -157,9 +157,12 @@ class LLMClient:
                     {"role": "user", "content": prompt}
                 ],
                 format="json",
+                stream=False,
+                keep_alive="30m",
                 options={
                     "temperature": 0,
-                    "num_ctx": 8192,
+                    "num_ctx": 2048,
+                    "num_predict": 512,
                     "seed": 7
                 }
             )
