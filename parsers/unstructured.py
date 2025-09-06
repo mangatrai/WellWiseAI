@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Dict, Any, List
 from datetime import datetime
 from .base_parser import BaseParser, ParsedData, ContextualDocument
+from utils import LLMClient
 
 class UnstructuredParser(BaseParser):
     """Universal parser using Unstructured SDK for general document types"""
@@ -20,14 +21,19 @@ class UnstructuredParser(BaseParser):
         # Supported file extensions from configuration
         self.supported_extensions = supported_extensions or []
         
-        # Initialize OpenAI client if API key is available
-        self.openai_client = None
-        if os.getenv('OPENAI_API_KEY'):
-            try:
-                from openai import OpenAI
-                self.openai_client = OpenAI()
-            except ImportError:
-                self.logger.warning("OpenAI library not available")
+        # Initialize hybrid LLM client
+        try:
+            self.llm_client = LLMClient()
+            self.llm_available = self.llm_client.is_available()
+            if self.llm_available:
+                backend_info = self.llm_client.get_backend_info()
+                self.logger.info(f"LLM enhancement available using {backend_info['backend']}")
+            else:
+                self.logger.warning("LLM enhancement not available")
+        except Exception as e:
+            self.llm_client = None
+            self.llm_available = False
+            self.logger.error(f"Failed to initialize LLM client: {e}")
     
     def can_parse(self) -> bool:
         """Check if this file can be parsed by Unstructured SDK"""
@@ -149,8 +155,8 @@ class UnstructuredParser(BaseParser):
             return self.create_error_result(str(e))
     
     def enhance_chunk_metadata(self, content: str) -> Dict[str, Any]:
-        """Enhance chunk metadata using OpenAI LLM"""
-        if not self.openai_client or len(content.strip()) < 50:
+        """Enhance chunk metadata using hybrid LLM client"""
+        if not self.llm_available or not self.llm_client or len(content.strip()) < 50:
             return {}
         
         try:
@@ -180,25 +186,12 @@ Return ONLY a valid JSON object with this exact structure:
 IMPORTANT: Limit depth_references to maximum 10 values. Do not include all depth values.
 """
             
-            response = self.openai_client.chat.completions.create(
-                model=model,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=800,
-                temperature=0,
-                response_format={"type": "json_object"}
-            )
+            # Use hybrid LLM client
+            result = self.llm_client.enhance_metadata(prompt, max_tokens=800)
             
-            llm_response = response.choices[0].message.content
-            self.logger.debug(f"Raw LLM response: {llm_response}")
-            
-            try:
-                result = json.loads(llm_response)
-                self.logger.debug(f"LLM enhanced metadata: {result}")
-                return result
-            except json.JSONDecodeError as e:
-                self.logger.warning(f"JSON parsing failed for LLM response: {e}")
-                self.logger.debug(f"Raw LLM response: {llm_response}")
-                return {}
+            # result is already parsed JSON from the LLM client
+            self.logger.debug(f"LLM enhanced metadata: {result}")
+            return result
             
         except Exception as e:
             self.logger.warning(f"LLM metadata enhancement failed: {e}")

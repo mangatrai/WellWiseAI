@@ -13,8 +13,8 @@ import logging
 import pandas as pd
 from typing import Dict, List, Any, Optional
 from datetime import datetime
-from openai import OpenAI
 from dotenv import load_dotenv
+from utils import LLMClient
 
 # Load environment variables
 load_dotenv()
@@ -28,17 +28,19 @@ class XLSXParser:
     
     def __init__(self):
         """Initialize the XLSX parser."""
-        self.openai_api_key = os.getenv('OPENAI_API_KEY')
-        self.chat_completion_model = os.getenv('CHAT_COMPLETION_MODEL', 'gpt-4o-mini')
-        
-        if self.openai_api_key:
-            self.client = OpenAI(api_key=self.openai_api_key)
-            self.llm_available = True
-            logger.info(f"LLM enhancement available using {self.chat_completion_model}")
-        else:
-            self.client = None
+        # Initialize hybrid LLM client
+        try:
+            self.llm_client = LLMClient()
+            self.llm_available = self.llm_client.is_available()
+            if self.llm_available:
+                backend_info = self.llm_client.get_backend_info()
+                logger.info(f"LLM enhancement available using {backend_info['backend']}")
+            else:
+                logger.warning("LLM enhancement not available")
+        except Exception as e:
+            self.llm_client = None
             self.llm_available = False
-            logger.warning("LLM enhancement not available - OPENAI_API_KEY not found")
+            logger.error(f"Failed to initialize LLM client: {e}")
     
     def parse_file(self, file_path: str) -> List[Dict[str, Any]]:
         """
@@ -174,6 +176,9 @@ class XLSXParser:
         Returns:
             Dictionary with LLM-enhanced fields or None if enhancement fails
         """
+        if not self.llm_available or not self.llm_client:
+            return None
+            
         try:
             # Prepare context for LLM
             facies_code = record.get('facies_code', '')
@@ -198,24 +203,11 @@ class XLSXParser:
             IMPORTANT: Return only valid JSON with final calculated values. Do not include any mathematical expressions, calculations, or reasoning in the JSON. Only return the final numeric results.
             """
             
-            response = self.client.chat.completions.create(
-                model=self.chat_completion_model,
-                messages=[
-                    {"role": "system", "content": "You are a geological expert. Extract geological context from facies interpretations and return only valid JSON."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0,
-                max_tokens=600,
-                response_format={"type": "json_object"}
-            )
+            # Use hybrid LLM client
+            enhanced_data = self.llm_client.enhance_metadata(prompt, max_tokens=600)
             
-            # Parse LLM response
-            llm_content = response.choices[0].message.content.strip()
-            #logger.debug(f"LLM response: {llm_content}")
-            
-            # Try to extract JSON from response with better error handling
+            # enhanced_data is already parsed JSON from the LLM client
             try:
-                enhanced_data = json.loads(llm_content)
                 logger.debug(f"LLM enhancement successful for {record.get('well_id')} at {record.get('depth_start')}m")
                 
                 # Add geological context to remarks
