@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import Dict, List, Any, Optional
 from parsers.base_parser import BaseParser
 from dotenv import load_dotenv
-import openai
+from utils import LLMClient
 
 class DatParser(BaseParser):
     """Parser for well picks .dat files containing formation tops data"""
@@ -26,14 +26,19 @@ class DatParser(BaseParser):
         # Load environment variables
         load_dotenv()
         
-        # Initialize OpenAI client
-        api_key = os.getenv('OPENAI_API_KEY')
-        if api_key:
-            self.openai_client = openai.OpenAI(api_key=api_key)
-            self.model = os.getenv('CHAT_COMPLETION_MODEL', 'gpt-4o-mini')
-        else:
-            self.openai_client = None
-            self.logger.warning("OpenAI API key not found. LLM enhancement will be disabled.")
+        # Initialize hybrid LLM client
+        try:
+            self.llm_client = LLMClient()
+            self.llm_available = self.llm_client.is_available()
+            if self.llm_available:
+                backend_info = self.llm_client.get_backend_info()
+                self.logger.info(f"LLM enhancement available using {backend_info['backend']}")
+            else:
+                self.logger.warning("LLM enhancement not available")
+        except Exception as e:
+            self.llm_client = None
+            self.llm_available = False
+            self.logger.error(f"Failed to initialize LLM client: {e}")
         
     def can_parse(self, file_path: str) -> bool:
         """Check if this parser can handle the given file"""
@@ -149,8 +154,8 @@ class DatParser(BaseParser):
         return None, None
 
     def enhance_record_with_llm(self, record: Dict[str, Any]) -> Dict[str, Any]:
-        """Enhance record with additional canonical fields using OpenAI LLM"""
-        if not self.openai_client:
+        """Enhance record with additional canonical fields using hybrid LLM client"""
+        if not self.llm_available or not self.llm_client:
             return record
             
         try:
@@ -187,22 +192,11 @@ IMPORTANT:
 
 Return only valid JSON, no explanations."""
             
-            response = self.openai_client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=500,
-                temperature=0,
-                response_format={"type": "json_object"}
-            )
+            # Use hybrid LLM client
+            enhanced_data = self.llm_client.enhance_metadata(prompt, max_tokens=500)
             
-            llm_response = response.choices[0].message.content.strip()
-            
-            # Try to parse JSON directly
-            try:
-                enhanced_fields = json.loads(llm_response)
-            except json.JSONDecodeError as e:
-                self.logger.warning(f"JSON parsing failed for {record.get('well_id', 'unknown')}: {e}")
-                return record
+            # enhanced_data is already parsed JSON from the LLM client
+            enhanced_fields = enhanced_data
             
             # Filter out non-canonical fields and merge enhanced fields with original record
             canonical_fields = {
@@ -297,7 +291,7 @@ Return only valid JSON, no explanations."""
             record = {k: v for k, v in record.items() if v is not None}
             
             # Enhance with LLM if available (limit to first 5 records for testing)
-            if self.openai_client and self.record_count < 5:
+            if self.llm_available and self.record_count < 5:
                 record = self.enhance_record_with_llm(record)
                 self.record_count += 1
             
