@@ -73,7 +73,7 @@ class UnstructuredParser(BaseParser):
             from unstructured.documents.elements import Table, Text, Title, Image
             
             # Process document with Unstructured
-            self.logger.info(f"Processing {self.file_path.name} with Unstructured SDK")
+            self.logger.info(f"Processing {self.file_path} with Unstructured SDK")
             
             # Use text partitioner for ASC files, auto partitioner for others
             if self.file_path.suffix.lower() in ['.asc', '.txt', '.dat', '.las']:
@@ -185,6 +185,9 @@ Return ONLY a valid JSON object with this exact structure:
 
 IMPORTANT: Limit depth_references to maximum 10 values. Do not include all depth values.
 """
+            
+            #log the prompt
+            self.logger.debug(f"***LLM prompt***: {prompt}")
             
             # Use hybrid LLM client
             result = self.llm_client.enhance_metadata(prompt, max_tokens=800)
