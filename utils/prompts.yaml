@@ -1,0 +1,322 @@
+# WellWise AI Model-Specific Prompts
+# This file contains optimized prompts for different LLM models and parser types
+
+models:
+  llama3.1:8b:
+    active: false
+    description: "prompts to use withLlama 3.1 8B model"
+    prompts:
+      unstructured: |
+        Extract key information from this oil & gas document content and return JSON:
+
+        Content:
+        {content}
+
+        Return ONLY a valid JSON object with this exact structure:
+        {{
+            "well_id": "well identifier or null",
+            "document_type": "petrophysical_report|md_plot|technical_document|facies_data|unknown",
+            "technical_terms": ["list", "of", "technical", "terms"],
+            "mathematical_formulas": ["list", "of", "equations", "or", "formulas"],
+            "geological_context": {{
+                "formations": ["formation", "names"],
+                "field": "field name or null"
+            }},
+            "depth_references": ["max 10 most important depth values only"],
+            "curve_names": ["list", "of", "log", "curve", "names"]
+        }}
+
+        IMPORTANT: Limit depth_references to maximum 10 values. Do not include all depth values.
+
+      dat: |
+        Extract additional canonical fields from this well pick data and return as JSON:
+
+        Well ID: {well_id}
+        Formation: {horizon_name}
+        Depth: {depth_start}m
+        Remarks: {remarks}
+        Coordinates: Latitude={latitude}, Longitude={longitude} if available
+
+        Extract and return JSON with these additional fields:
+        - latitude, longitude (use provided coordinates or convert UTM Zone 32N from remarks to WGS84 lat/long)
+        - qc_flag (boolean, true if quality issues detected in remarks)
+        - country (from well naming pattern, likely Norway)
+        - field_name (from well naming, likely Volve)
+        - block_name (extract from well ID pattern)
+        - facies_code (geological facies classification from formation name)
+        - depth_end (estimate based on formation type and depth)
+
+        IMPORTANT:
+        - Use provided latitude/longitude if available, otherwise extract from remarks
+        - Do NOT include non-canonical fields like "formation", "depth", or "coordinates"
+        - Return only valid JSON with canonical field names
+
+      survey: |
+        Analyze this well survey data and extract additional context:
+
+        Well ID: {well_id}
+        Field: {field_name}
+        Measured Depth: {md}m
+        True Vertical Depth: {tvd}m
+        Inclination: {inclination}°
+        Azimuth: {azimuth}°
+
+        Please extract the following information in JSON format:
+        1. field_name: The oil field name (likely "{field_name}" if provided)
+        2. country: The country (likely "Norway" based on company info)
+        3. formation_temp: Estimated temperature at depth (use 3°C/100m geothermal gradient) - RETURN ONLY THE FINAL NUMBER, NO CALCULATIONS
+        4. formation_press: Estimated pressure at depth (use 10 MPa/km pressure gradient) - RETURN ONLY THE FINAL NUMBER, NO CALCULATIONS
+        5. survey_summary: Brief survey interpretation (max 200 characters)
+
+        IMPORTANT: Return only valid JSON with final calculated values. Do not include any mathematical expressions, calculations, or reasoning in the JSON. Only return the final numeric results.
+
+      xlsx: |
+        Analyze this geological facies interpretation and extract additional context:
+
+        Well ID: {well_id}
+        Depth Interval: {depth_start}-{depth_end} meters
+        Facies Code: {facies_code}
+
+        Please extract the following information in JSON format:
+        1. field_name: The oil field name (likely "Volve" based on well naming)
+        2. country: The country (likely "Norway" based on well naming)
+        3. formation_temp: Estimated temperature at depth (use 3°C/100m geothermal gradient) - RETURN ONLY THE FINAL NUMBER, NO CALCULATIONS
+        4. formation_press: Estimated pressure at depth (use 10 MPa/km pressure gradient) - RETURN ONLY THE FINAL NUMBER, NO CALCULATIONS
+        5. geological_summary: Brief geological interpretation (max 200 characters)
+
+        IMPORTANT: Return only valid JSON with final calculated values. Do not include any mathematical expressions, calculations, or reasoning in the JSON. Only return the final numeric results.
+
+  gpt-4o-mini:
+    active: false
+    description: "OpenAI GPT-4o Mini model for production use"
+    prompts:
+      unstructured: |
+        Extract key information from this oil & gas document content and return JSON:
+
+        Content:
+        {content}
+
+        Return ONLY a valid JSON object with this exact structure:
+        {{
+            "well_id": "well identifier or null",
+            "document_type": "petrophysical_report|md_plot|technical_document|facies_data|unknown",
+            "technical_terms": ["list", "of", "technical", "terms"],
+            "mathematical_formulas": ["list", "of", "equations", "or", "formulas"],
+            "geological_context": {{
+                "formations": ["formation", "names"],
+                "field": "field name or null"
+            }},
+            "depth_references": ["max 10 most important depth values only"],
+            "curve_names": ["list", "of", "log", "curve", "names"]
+        }}
+
+        IMPORTANT: Limit depth_references to maximum 10 values. Do not include all depth values.
+
+      dat: |
+        Extract additional canonical fields from this well pick data and return as JSON:
+
+        Well ID: {well_id}
+        Formation: {horizon_name}
+        Depth: {depth_start}m
+        Remarks: {remarks}
+        Coordinates: Latitude={latitude}, Longitude={longitude} if available
+
+        Extract and return JSON with these additional fields:
+        - latitude, longitude (use provided coordinates or convert UTM Zone 32N from remarks to WGS84 lat/long)
+        - qc_flag (boolean, true if quality issues detected in remarks)
+        - country (from well naming pattern, likely Norway)
+        - field_name (from well naming, likely Volve)
+        - block_name (extract from well ID pattern)
+        - facies_code (geological facies classification from formation name)
+        - depth_end (estimate based on formation type and depth)
+
+        IMPORTANT:
+        - Use provided latitude/longitude if available, otherwise extract from remarks
+        - Do NOT include non-canonical fields like "formation", "depth", or "coordinates"
+        - Return only valid JSON with canonical field names
+
+      survey: |
+        Analyze this well survey data and extract additional context:
+
+        Well ID: {well_id}
+        Field: {field_name}
+        Measured Depth: {md}m
+        True Vertical Depth: {tvd}m
+        Inclination: {inclination}°
+        Azimuth: {azimuth}°
+
+        Please extract the following information in JSON format:
+        1. field_name: The oil field name (likely "{field_name}" if provided)
+        2. country: The country (likely "Norway" based on company info)
+        3. formation_temp: Estimated temperature at depth (use 3°C/100m geothermal gradient) - RETURN ONLY THE FINAL NUMBER, NO CALCULATIONS
+        4. formation_press: Estimated pressure at depth (use 10 MPa/km pressure gradient) - RETURN ONLY THE FINAL NUMBER, NO CALCULATIONS
+        5. survey_summary: Brief survey interpretation (max 200 characters)
+
+        IMPORTANT: Return only valid JSON with final calculated values. Do not include any mathematical expressions, calculations, or reasoning in the JSON. Only return the final numeric results.
+
+      xlsx: |
+        Analyze this geological facies interpretation and extract additional context:
+
+        Well ID: {well_id}
+        Depth Interval: {depth_start}-{depth_end} meters
+        Facies Code: {facies_code}
+
+        Please extract the following information in JSON format:
+        1. field_name: The oil field name (likely "Volve" based on well naming)
+        2. country: The country (likely "Norway" based on well naming)
+        3. formation_temp: Estimated temperature at depth (use 3°C/100m geothermal gradient) - RETURN ONLY THE FINAL NUMBER, NO CALCULATIONS
+        4. formation_press: Estimated pressure at depth (use 10 MPa/km pressure gradient) - RETURN ONLY THE FINAL NUMBER, NO CALCULATIONS
+        5. geological_summary: Brief geological interpretation (max 200 characters)
+
+        IMPORTANT: Return only valid JSON with final calculated values. Do not include any mathematical expressions, calculations, or reasoning in the JSON. Only return the final numeric results.
+
+  qwen2.5:3b:
+    active: true
+    description: "prompts to use with Qwen 2.5 3B model"
+    prompts:
+      unstructured: |
+        You are a petroleum engineer analyzing oil & gas well data. Extract information using these specific patterns:
+
+        WELL IDENTIFICATION:
+        - "WELL : 15/9-F-11" → well_id: "15/9-F-11"
+        - "WELLBORE : 15/9-F-11" → well_id: "15/9-F-11"
+        - "Well 15/9-F-4" → well_id: "15/9-F-4"
+        - "NO 15/5-7 A" → well_id: "NO 15/5-7 A"
+
+        FIELD IDENTIFICATION:
+        - "FIELD : VOLVE" → field: "Volve"
+        - "Volve Model" → field: "Volve"
+        - If well ID contains "15/9-F" → field: "Volve"
+        - If well ID contains "NO 15/5-7" → field: "Volve"
+
+        DOCUMENT TYPE:
+        - Contains "PETROPHYSICAL INTERPRETATION" → petrophysical_report
+        - Contains "Well picks" → technical_document
+        - Contains "PETROPHYSICS" → petrophysical_report
+
+        CURVE NAMES (EXTRACT EXACTLY AS SHOWN):
+        - "BS:COMPOSITE:rC:NONE:v1" → curve: "BS"
+        - "GR:COMPOSITE:rC:NONE:v1" → curve: "GR"
+        - "RACEHM:COMPOSITE:rC:NONE:v1" → curve: "RACEHM"
+        - "ER: Eroded" → curve: "ER"
+        - "FP: Faulted pick" → curve: "FP"
+        - "FO: Faulted out" → curve: "FO"
+        - "Qlf: Quality factor" → curve: "Qlf"
+        - "density log" → curve: "density log"
+
+        Content:
+        {content}
+
+        Extract using these patterns and return ONLY a valid JSON object:
+        {{
+            "well_id": "extracted well identifier or null",
+            "document_type": "petrophysical_report|md_plot|technical_document|facies_data|unknown",
+            "technical_terms": ["list", "of", "technical", "terms"],
+            "mathematical_formulas": ["list", "of", "equations", "or", "formulas"],
+            "geological_context": {{
+                "formations": ["formation", "names"],
+                "field": "field name or null"
+            }},
+            "depth_references": ["max 10 most important depth values only"],
+            "curve_names": ["list", "of", "log", "curve", "names"]
+        }}
+
+      dat: |
+        You are a petroleum engineer analyzing well pick data. Extract information using these specific patterns:
+
+        WELL IDENTIFICATION:
+        - Extract well ID from the provided data
+        - Common patterns: "15/9-F-11", "NO 15/5-7 A"
+
+        FIELD IDENTIFICATION:
+        - If well ID contains "15/9-F" → field: "Volve"
+        - If well ID contains "NO 15/5-7" → field: "Volve"
+        - Look for "Volve" in remarks or context
+
+        COORDINATE EXTRACTION:
+        - Look for UTM Zone 32N coordinates in remarks
+        - Convert to WGS84 lat/long if needed
+        - Use provided coordinates if available
+
+        Well ID: {well_id}
+        Formation: {horizon_name}
+        Depth: {depth_start}m
+        Remarks: {remarks}
+        Coordinates: Latitude={latitude}, Longitude={longitude} if available
+
+        Extract and return JSON with these additional fields:
+        - latitude, longitude (use provided coordinates or convert UTM Zone 32N from remarks to WGS84 lat/long)
+        - qc_flag (boolean, true if quality issues detected in remarks)
+        - country (from well naming pattern, likely Norway)
+        - field_name (from well naming, likely Volve)
+        - block_name (extract from well ID pattern)
+        - facies_code (geological facies classification from formation name)
+        - depth_end (estimate based on formation type and depth)
+
+        IMPORTANT:
+        - Use provided latitude/longitude if available, otherwise extract from remarks
+        - Do NOT include non-canonical fields like "formation", "depth", or "coordinates"
+        - Return only valid JSON with canonical field names
+
+      survey: |
+        You are a petroleum engineer analyzing well survey data. Extract information using these specific patterns:
+
+        TEMPERATURE CALCULATION:
+        - Use 3°C/100m geothermal gradient
+        - Formula: temperature = 3 * (depth/100)
+        - Return ONLY the final number
+
+        PRESSURE CALCULATION:
+        - Use 10 MPa/km pressure gradient
+        - Formula: pressure = 10 * (depth/1000)
+        - Return ONLY the final number
+
+        FIELD IDENTIFICATION:
+        - If well ID contains "15/9-F" → field: "Volve"
+        - If well ID contains "NO 15/5-7" → field: "Volve"
+
+        Well ID: {well_id}
+        Field: {field_name}
+        Measured Depth: {md}m
+        True Vertical Depth: {tvd}m
+        Inclination: {inclination}°
+        Azimuth: {azimuth}°
+
+        Extract and return JSON with these fields:
+        - field_name: The oil field name (likely "{field_name}" if provided)
+        - country: The country (likely "Norway" based on company info)
+        - formation_temp: Estimated temperature at depth (use 3°C/100m geothermal gradient) - RETURN ONLY THE FINAL NUMBER, NO CALCULATIONS
+        - formation_press: Estimated pressure at depth (use 10 MPa/km pressure gradient) - RETURN ONLY THE FINAL NUMBER, NO CALCULATIONS
+        - survey_summary: Brief survey interpretation (max 200 characters)
+
+        IMPORTANT: Return only valid JSON with final calculated values. Do not include any mathematical expressions, calculations, or reasoning in the JSON. Only return the final numeric results.
+
+      xlsx: |
+        You are a petroleum engineer analyzing geological facies interpretation. Extract information using these specific patterns:
+
+        TEMPERATURE CALCULATION:
+        - Use 3°C/100m geothermal gradient
+        - Formula: temperature = 3 * (depth/100)
+        - Return ONLY the final number
+
+        PRESSURE CALCULATION:
+        - Use 10 MPa/km pressure gradient
+        - Formula: pressure = 10 * (depth/1000)
+        - Return ONLY the final number
+
+        FIELD IDENTIFICATION:
+        - If well ID contains "15/9-F" → field: "Volve"
+        - If well ID contains "NO 15/5-7" → field: "Volve"
+
+        Well ID: {well_id}
+        Depth Interval: {depth_start}-{depth_end} meters
+        Facies Code: {facies_code}
+
+        Extract and return JSON with these fields:
+        - field_name: The oil field name (likely "Volve" based on well naming)
+        - country: The country (likely "Norway" based on well naming)
+        - formation_temp: Estimated temperature at depth (use 3°C/100m geothermal gradient) - RETURN ONLY THE FINAL NUMBER, NO CALCULATIONS
+        - formation_press: Estimated pressure at depth (use 10 MPa/km pressure gradient) - RETURN ONLY THE FINAL NUMBER, NO CALCULATIONS
+        - geological_summary: Brief geological interpretation (max 200 characters)
+
+        IMPORTANT: Return only valid JSON with final calculated values. Do not include any mathematical expressions, calculations, or reasoning in the JSON. Only return the final numeric results.

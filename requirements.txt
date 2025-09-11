@@ -26,3 +26,6 @@ unstructured[local-inference]>=0.10.0
 openai>=1.0.0
 
 ollama
+
+# YAML parsing
+pyyaml

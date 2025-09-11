@@ -12,6 +12,7 @@ from typing import Dict, Any, List
 from datetime import datetime
 from .base_parser import BaseParser, ParsedData, ContextualDocument
 from utils import LLMClient
+from utils.prompt_loader import get_prompt
 
 class UnstructuredParser(BaseParser):
     """Universal parser using Unstructured SDK for general document types"""
@@ -160,31 +161,8 @@ class UnstructuredParser(BaseParser):
             return {}
         
         try:
-            # Get model from environment or use default
-            model = os.getenv('CHAT_COMPLETION_MODEL', 'gpt-4o-mini')
-            
-            prompt = f"""
-Extract key information from this oil & gas document content and return JSON:
-
-Content:
-{content[:3000]}
-
-Return ONLY a valid JSON object with this exact structure:
-{{
-    "well_id": "well identifier or null",
-    "document_type": "petrophysical_report|md_plot|technical_document|facies_data|unknown",
-    "technical_terms": ["list", "of", "technical", "terms"],
-    "mathematical_formulas": ["list", "of", "equations", "or", "formulas"],
-    "geological_context": {{
-        "formations": ["formation", "names"],
-        "field": "field name or null"
-    }},
-    "depth_references": ["max 10 most important depth values only"],
-    "curve_names": ["list", "of", "log", "curve", "names"]
-}}
-
-IMPORTANT: Limit depth_references to maximum 10 values. Do not include all depth values.
-"""
+     
+            prompt = get_prompt('unstructured', content=content[:3000])
             
             #log the prompt
             self.logger.debug(f"***LLM prompt***: {prompt}")

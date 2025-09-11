@@ -15,6 +15,7 @@ from typing import Dict, List, Any, Optional
 from datetime import datetime
 from dotenv import load_dotenv
 from utils import LLMClient
+from utils.prompt_loader import get_prompt
 
 # Load environment variables
 load_dotenv()
@@ -301,25 +302,13 @@ class SurveyParser:
             azimuth = record.get('plan_azimuth', 0)
             field_name = header_info.get('field_name', '')
             
-            prompt = f"""
-            Analyze this well survey data and extract additional context:
-            
-            Well ID: {well_id}
-            Field: {field_name}
-            Measured Depth: {md}m
-            True Vertical Depth: {tvd}m
-            Inclination: {inclination}°
-            Azimuth: {azimuth}°
-            
-            Please extract the following information in JSON format:
-            1. field_name: The oil field name (likely "{field_name}" if provided)
-            2. country: The country (likely "Norway" based on company info)
-            3. formation_temp: Estimated temperature at depth (use 3°C/100m geothermal gradient) - RETURN ONLY THE FINAL NUMBER, NO CALCULATIONS
-            4. formation_press: Estimated pressure at depth (use 10 MPa/km pressure gradient) - RETURN ONLY THE FINAL NUMBER, NO CALCULATIONS
-            5. survey_summary: Brief survey interpretation (max 200 characters)
-            
-            IMPORTANT: Return only valid JSON with final calculated values. Do not include any mathematical expressions, calculations, or reasoning in the JSON. Only return the final numeric results.
-            """
+            prompt = get_prompt('survey',
+                              well_id=well_id,
+                              field_name=field_name,
+                              md=md,
+                              tvd=tvd,
+                              inclination=inclination,
+                              azimuth=azimuth)
             
             # Use hybrid LLM client
             enhanced_data = self.llm_client.enhance_metadata(prompt, max_tokens=600)

@@ -13,6 +13,7 @@ from typing import Dict, List, Any, Optional
 from parsers.base_parser import BaseParser
 from dotenv import load_dotenv
 from utils import LLMClient
+from utils.prompt_loader import get_prompt
 
 class DatParser(BaseParser):
     """Parser for well picks .dat files containing formation tops data"""
@@ -168,29 +169,13 @@ class DatParser(BaseParser):
             # Extract coordinates from remarks if available
             latitude, longitude = self.extract_coordinates_from_remarks(remarks)
             
-            prompt = f"""Extract additional canonical fields from this well pick data and return as JSON:
-
-Well ID: {well_id}
-Formation: {horizon_name}
-Depth: {depth_start}m
-Remarks: {remarks}
-Coordinates: Latitude={latitude}, Longitude={longitude} if available
-
-Extract and return JSON with these additional fields:
-- latitude, longitude (use provided coordinates or convert UTM Zone 32N from remarks to WGS84 lat/long)
-- qc_flag (boolean, true if quality issues detected in remarks)
-- country (from well naming pattern, likely Norway)
-- field_name (from well naming, likely Volve)
-- block_name (extract from well ID pattern)
-- facies_code (geological facies classification from formation name)
-- depth_end (estimate based on formation type and depth)
-
-IMPORTANT:
-- Use provided latitude/longitude if available, otherwise extract from remarks
-- Do NOT include non-canonical fields like "formation", "depth", or "coordinates"
-- Return only valid JSON with canonical field names
-
-Return only valid JSON, no explanations."""
+            prompt = get_prompt('dat', 
+                              well_id=well_id,
+                              horizon_name=horizon_name,
+                              depth_start=depth_start,
+                              remarks=remarks,
+                              latitude=latitude,
+                              longitude=longitude)
             
             # Use hybrid LLM client
             enhanced_data = self.llm_client.enhance_metadata(prompt, max_tokens=500)

@@ -15,6 +15,7 @@ from typing import Dict, List, Any, Optional
 from datetime import datetime
 from dotenv import load_dotenv
 from utils import LLMClient
+from utils.prompt_loader import get_prompt
 
 # Load environment variables
 load_dotenv()
@@ -186,22 +187,11 @@ class XLSXParser:
             depth_end = record.get('depth_end', 0)
             well_id = record.get('well_id', '')
             
-            prompt = f"""
-            Analyze this geological facies interpretation and extract additional context:
-            
-            Well ID: {well_id}
-            Depth Interval: {depth_start}-{depth_end} meters
-            Facies Code: {facies_code}
-            
-            Please extract the following information in JSON format:
-            1. field_name: The oil field name (likely "Volve" based on well naming)
-            2. country: The country (likely "Norway" based on well naming)
-            3. formation_temp: Estimated temperature at depth (use 3°C/100m geothermal gradient) - RETURN ONLY THE FINAL NUMBER, NO CALCULATIONS
-            4. formation_press: Estimated pressure at depth (use 10 MPa/km pressure gradient) - RETURN ONLY THE FINAL NUMBER, NO CALCULATIONS
-            5. geological_summary: Brief geological interpretation (max 200 characters)
-            
-            IMPORTANT: Return only valid JSON with final calculated values. Do not include any mathematical expressions, calculations, or reasoning in the JSON. Only return the final numeric results.
-            """
+            prompt = get_prompt('xlsx',
+                              well_id=well_id,
+                              depth_start=depth_start,
+                              depth_end=depth_end,
+                              facies_code=facies_code)
             
             # Use hybrid LLM client
             enhanced_data = self.llm_client.enhance_metadata(prompt, max_tokens=600)
