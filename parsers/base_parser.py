@@ -36,49 +36,18 @@ class BaseParser(ABC):
     def __init__(self, file_path: str):
         self.file_path = Path(file_path)
         
-        # Setup unified logging for parsers
-        def setup_parser_logging():
-            """Setup logging for parser operations."""
-            import os
-            log_level = os.getenv('LOG_LEVEL', 'INFO')
-            
-            # Convert string log level to logging constant
-            level_map = {
-                'DEBUG': logging.DEBUG,
-                'INFO': logging.INFO,
-                'WARNING': logging.WARNING,
-                'ERROR': logging.ERROR
-            }
-            log_level_constant = level_map.get(log_level.upper(), logging.INFO)
-            
-            # Get logger for parser operations
-            logger = logging.getLogger(self.__class__.__name__)
-            logger.setLevel(log_level_constant)
-            
-            # Only add handlers if they don't already exist (avoid duplicates)
-            if not logger.handlers:
-                # Console handler
-                console_handler = logging.StreamHandler()
-                console_handler.setLevel(log_level_constant)
-                
-                # File handler - use environment variable
-                log_file = os.getenv('LOG_FILE_NAME', 'wellwise_parser.log')
-                file_handler = logging.FileHandler(log_file)
-                file_handler.setLevel(logging.DEBUG)  # Always log everything to file
-                
-                # Formatter
-                formatter = logging.Formatter(
-                    '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-                )
-                console_handler.setFormatter(formatter)
-                file_handler.setFormatter(formatter)
-                
-                logger.addHandler(console_handler)
-                logger.addHandler(file_handler)
-            
-            return logger
-        
-        self.logger = setup_parser_logging()
+        # Use logger by name - handlers are set up by main pipeline
+        self.logger = logging.getLogger(self.__class__.__name__)
+        # Set logger level to match main pipeline
+        import os
+        log_level = os.getenv('LOG_LEVEL', 'INFO')
+        level_map = {
+            'DEBUG': logging.DEBUG,
+            'INFO': logging.INFO,
+            'WARNING': logging.WARNING,
+            'ERROR': logging.ERROR
+        }
+        self.logger.setLevel(level_map.get(log_level.upper(), logging.INFO))
         
     @abstractmethod
     def can_parse(self) -> bool:
