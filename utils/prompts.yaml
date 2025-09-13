@@ -175,13 +175,15 @@ models:
     description: "prompts to use with Qwen 2.5 3B model"
     prompts:
       unstructured: |
-        You are a petroleum engineer analyzing oil & gas well data. Extract information using these specific patterns:
+        You are an expert petroleum engineer analyzing oil & gas well data. Extract information using these CRITICAL patterns:
 
-        WELL IDENTIFICATION:
-        - "WELL : 15/9-F-11" → well_id: "15/9-F-11"
-        - "WELLBORE : 15/9-F-11" → well_id: "15/9-F-11"
-        - "Well 15/9-F-4" → well_id: "15/9-F-4"
-        - "NO 15/5-7 A" → well_id: "NO 15/5-7 A"
+        WELL IDENTIFICATION (MOST IMPORTANT - EXTRACT FROM ACTUAL CONTENT ONLY):
+        - Look for "WELL : 15/9-F-11" → well_id: "15/9-F-11"
+        - Look for "WELLBORE : 15/9-F-11" → well_id: "15/9-F-11"  
+        - Look for "Well 15/9-F-4" → well_id: "15/9-F-4"
+        - Look for "15/9-F-10" in title/header → well_id: "15/9-F-10"
+        - Look for "NO 15/5-7 A" → well_id: "NO 15/5-7 A"
+        - CRITICAL: Only extract well_id if explicitly mentioned in the content. Do NOT hallucinate or guess.
 
         FIELD IDENTIFICATION:
         - "FIELD : VOLVE" → field: "Volve"
@@ -189,10 +191,33 @@ models:
         - If well ID contains "15/9-F" → field: "Volve"
         - If well ID contains "NO 15/5-7" → field: "Volve"
 
-        DOCUMENT TYPE:
+        DOCUMENT TYPE (DETERMINE FROM CONTENT):
         - Contains "PETROPHYSICAL INTERPRETATION" → petrophysical_report
         - Contains "Well picks" → technical_document
         - Contains "PETROPHYSICS" → petrophysical_report
+        - Contains "facies" or "facies data" → facies_data
+        - Contains "MD plot" or "depth plot" → md_plot
+
+        TECHNICAL TERMS (EXTRACT ONLY TERMS PRESENT IN CONTENT):
+        - Scan the content word by word and extract ONLY technical terms that are actually written in the text
+        - Do NOT use any predefined list of terms
+        - Do NOT extract terms that are not explicitly written in the content
+        - Examples of what to look for: if you see "porosity" in the text, extract it; if you see "density log" in the text, extract it
+        - If you don't see a technical term in the actual content, do NOT include it
+        - If no technical terms are visible in the content, return an empty array []
+
+        MATHEMATICAL FORMULAS (ONLY ACTUAL EQUATIONS):
+        - Look for: "Phif = Phid + A*(Nphi-Phid) + B"
+        - Look for: "VSH = (GRmax – GR) / (GRmax – GRmin)"
+        - Look for: "Sw = (a*Rw / Rt*Phif^m)^(1/n)"
+        - Look for: "Klogh = 10^(8*Phif-9*Vsh+2)"
+        - DO NOT include section numbers like "1.4" or "2.2"
+
+        DEPTH REFERENCES (EXTRACT ACTUAL DEPTH VALUES):
+        - Look for: "2800m TVDSS", "at 2800m", "depth 1500m", "TVD 2000m"
+        - Look for: "NetGros 0.997", "Phif 0.24", "Sw 0.997"
+        - Look for: "5870", "281", "3394" (if they appear to be depth-related)
+        - DO NOT use generic placeholders like "max 10 most important depth values only"
 
         CURVE NAMES (EXTRACT EXACTLY AS SHOWN):
         - "BS:COMPOSITE:rC:NONE:v1" → curve: "BS"
@@ -203,6 +228,12 @@ models:
         - "FO: Faulted out" → curve: "FO"
         - "Qlf: Quality factor" → curve: "Qlf"
         - "density log" → curve: "density log"
+        - "neutron log" → curve: "neutron log"
+        - "gamma ray log" → curve: "gamma ray log"
+
+        FORMATION NAMES (EXTRACT FROM CONTENT):
+        - Look for: "Hugin Formation", "Skagerak Formation", "Draupne", "Heather", "Smith Bank"
+        - Look for: "Hugin Fm", "Skagerak Fm"
 
         Content:
         {content}
@@ -222,21 +253,41 @@ models:
         }}
 
       dat: |
-        You are a petroleum engineer analyzing well pick data. Extract information using these specific patterns:
+        You are an expert petroleum engineer analyzing well pick data. Extract information using these CRITICAL patterns:
 
-        WELL IDENTIFICATION:
-        - Extract well ID from the provided data
-        - Common patterns: "15/9-F-11", "NO 15/5-7 A"
+        WELL IDENTIFICATION (MOST IMPORTANT - EXTRACT FROM ACTUAL DATA ONLY):
+        - Look for exact well ID patterns: "15/9-F-11", "NO 15/5-7 A"
+        - CRITICAL: Only extract well_id if explicitly present in the data. Do NOT hallucinate.
 
         FIELD IDENTIFICATION:
         - If well ID contains "15/9-F" → field: "Volve"
         - If well ID contains "NO 15/5-7" → field: "Volve"
         - Look for "Volve" in remarks or context
+        - Look for "NORWAY" or "Norway" in remarks
 
-        COORDINATE EXTRACTION:
-        - Look for UTM Zone 32N coordinates in remarks
-        - Convert to WGS84 lat/long if needed
+        COORDINATE EXTRACTION (BE PRECISE):
+        - Look for UTM Zone 32N coordinates in remarks (format: "UTM Zone 32N X=123456 Y=6543210")
+        - Convert UTM Zone 32N to WGS84 lat/long if needed
         - Use provided coordinates if available
+        - Look for "Param_LATI" and "Param_LONG" in remarks
+
+        DEPTH ANALYSIS (EXTRACT MEANINGFUL VALUES):
+        - Look for actual depth values in meters
+        - Consider formation type for depth estimation
+        - Look for "TVD" (True Vertical Depth) references
+
+        FORMATION ANALYSIS:
+        - Extract geological formation names from horizon_name
+        - Look for facies indicators in formation names
+        - Consider geological context for facies classification
+
+        TECHNICAL TERMS (EXTRACT ONLY TERMS PRESENT IN CONTENT):
+        - Scan the content word by word and extract ONLY technical terms that are actually written in the text
+        - Do NOT use any predefined list of terms
+        - Do NOT extract terms that are not explicitly written in the content
+        - Examples of what to look for: if you see "porosity" in the text, extract it; if you see "density log" in the text, extract it
+        - If you don't see a technical term in the actual content, do NOT include it
+        - If no technical terms are visible in the content, return an empty array []
 
         Well ID: {well_id}
         Formation: {horizon_name}
@@ -246,10 +297,10 @@ models:
 
         Extract and return JSON with these additional fields:
         - latitude, longitude (use provided coordinates or convert UTM Zone 32N from remarks to WGS84 lat/long)
-        - qc_flag (boolean, true if quality issues detected in remarks)
+        - qc_flag (boolean, true if quality issues detected in remarks like "faulted", "eroded", "questionable")
         - country (from well naming pattern, likely Norway)
         - field_name (from well naming, likely Volve)
-        - block_name (extract from well ID pattern)
+        - block_name (extract from well ID pattern like "15/9-F")
         - facies_code (geological facies classification from formation name)
         - depth_end (estimate based on formation type and depth)
 
@@ -257,23 +308,44 @@ models:
         - Use provided latitude/longitude if available, otherwise extract from remarks
         - Do NOT include non-canonical fields like "formation", "depth", or "coordinates"
         - Return only valid JSON with canonical field names
+        - Be precise with coordinate conversion if needed
 
       survey: |
-        You are a petroleum engineer analyzing well survey data. Extract information using these specific patterns:
+        You are an expert petroleum engineer analyzing well survey data. Extract information using these CRITICAL patterns:
 
-        TEMPERATURE CALCULATION:
+        WELL IDENTIFICATION (MOST IMPORTANT - EXTRACT FROM ACTUAL DATA ONLY):
+        - Look for exact well ID patterns: "15/9-F-11", "NO 15/5-7 A"
+        - CRITICAL: Only extract well_id if explicitly present in the data. Do NOT hallucinate.
+
+        TEMPERATURE CALCULATION (BE PRECISE):
         - Use 3°C/100m geothermal gradient
         - Formula: temperature = 3 * (depth/100)
-        - Return ONLY the final number
+        - Use the provided depth value for calculation
+        - Return ONLY the final number rounded to 1 decimal place
 
-        PRESSURE CALCULATION:
+        PRESSURE CALCULATION (BE PRECISE):
         - Use 10 MPa/km pressure gradient
         - Formula: pressure = 10 * (depth/1000)
-        - Return ONLY the final number
+        - Use the provided depth value for calculation
+        - Return ONLY the final number rounded to 1 decimal place
 
         FIELD IDENTIFICATION:
         - If well ID contains "15/9-F" → field: "Volve"
         - If well ID contains "NO 15/5-7" → field: "Volve"
+        - Look for "Volve" in context if available
+
+        SURVEY INTERPRETATION:
+        - Analyze inclination and azimuth values
+        - Consider well trajectory and drilling direction
+        - Provide meaningful geological context
+
+        TECHNICAL TERMS (EXTRACT ONLY TERMS PRESENT IN CONTENT):
+        - Scan the content word by word and extract ONLY technical terms that are actually written in the text
+        - Do NOT use any predefined list of terms
+        - Do NOT extract terms that are not explicitly written in the content
+        - Examples of what to look for: if you see "porosity" in the text, extract it; if you see "density log" in the text, extract it
+        - If you don't see a technical term in the actual content, do NOT include it
+        - If no technical terms are visible in the content, return an empty array []
 
         Well ID: {well_id}
         Field: {field_name}
@@ -292,21 +364,41 @@ models:
         IMPORTANT: Return only valid JSON with final calculated values. Do not include any mathematical expressions, calculations, or reasoning in the JSON. Only return the final numeric results.
 
       xlsx: |
-        You are a petroleum engineer analyzing geological facies interpretation. Extract information using these specific patterns:
+        You are an expert petroleum engineer analyzing geological facies interpretation. Extract information using these CRITICAL patterns:
 
-        TEMPERATURE CALCULATION:
+        WELL IDENTIFICATION (MOST IMPORTANT - EXTRACT FROM ACTUAL DATA ONLY):
+        - Look for exact well ID patterns: "15/9-F-11", "NO 15/5-7 A"
+        - CRITICAL: Only extract well_id if explicitly present in the data. Do NOT hallucinate.
+
+        TEMPERATURE CALCULATION (BE PRECISE):
         - Use 3°C/100m geothermal gradient
         - Formula: temperature = 3 * (depth/100)
-        - Return ONLY the final number
+        - Use the provided depth value for calculation
+        - Return ONLY the final number rounded to 1 decimal place
 
-        PRESSURE CALCULATION:
+        PRESSURE CALCULATION (BE PRECISE):
         - Use 10 MPa/km pressure gradient
         - Formula: pressure = 10 * (depth/1000)
-        - Return ONLY the final number
+        - Use the provided depth value for calculation
+        - Return ONLY the final number rounded to 1 decimal place
 
         FIELD IDENTIFICATION:
         - If well ID contains "15/9-F" → field: "Volve"
         - If well ID contains "NO 15/5-7" → field: "Volve"
+        - Look for "Volve" in context if available
+
+        FACIES ANALYSIS:
+        - Analyze facies codes for geological interpretation
+        - Consider depth intervals for geological context
+        - Look for facies patterns and geological significance
+
+        TECHNICAL TERMS (EXTRACT ONLY TERMS PRESENT IN CONTENT):
+        - Scan the content word by word and extract ONLY technical terms that are actually written in the text
+        - Do NOT use any predefined list of terms
+        - Do NOT extract terms that are not explicitly written in the content
+        - Examples of what to look for: if you see "porosity" in the text, extract it; if you see "density log" in the text, extract it
+        - If you don't see a technical term in the actual content, do NOT include it
+        - If no technical terms are visible in the content, return an empty array []
 
         Well ID: {well_id}
         Depth Interval: {depth_start}-{depth_end} meters
