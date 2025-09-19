@@ -13,45 +13,8 @@ from tqdm import tqdm
 load_dotenv()
 
 def setup_logging(log_level: str = None) -> logging.Logger:
-    """Setup logging using environment variables or fallback."""
-    if log_level is None:
-        log_level = os.getenv('LOG_LEVEL', 'INFO')
-    
-    # Convert string log level to logging constant
-    level_map = {
-        'DEBUG': logging.DEBUG,
-        'INFO': logging.INFO,
-        'WARNING': logging.WARNING,
-        'ERROR': logging.ERROR
-    }
-    log_level_constant = level_map.get(log_level.upper(), logging.INFO)
-    
-    # Get logger for wellwise_parser
-    logger = logging.getLogger('wellwise_parser')
-    logger.setLevel(log_level_constant)
-    
-    # Only add handlers if they don't already exist (avoid duplicates)
-    if not logger.handlers:
-        # Console handler
-        console_handler = logging.StreamHandler()
-        console_handler.setLevel(log_level_constant)
-        
-        # File handler - use environment variable
-        log_file = os.getenv('LOG_FILE_NAME', 'wellwise_parser.log')
-        file_handler = logging.FileHandler(log_file)
-        file_handler.setLevel(logging.DEBUG)  # Always log everything to file
-        
-        # Formatter
-        formatter = logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-        )
-        console_handler.setFormatter(formatter)
-        file_handler.setFormatter(formatter)
-        
-        logger.addHandler(console_handler)
-        logger.addHandler(file_handler)
-    
-    return logger
+    """Get logger - handlers are set up by main pipeline."""
+    return logging.getLogger('wellwise')
 
 def get_environment_config() -> Dict[str, str]:
     """Get configuration from environment variables with fallbacks."""
@@ -63,6 +26,7 @@ def get_environment_config() -> Dict[str, str]:
         'structured_file_types': os.getenv("STRUCTURED_FILE_TYPES", ".las,.dlis,.csv").split(","),
         'dual_processing_file_types': os.getenv("DUAL_PROCESSING_FILE_TYPES", "").split(",") if os.getenv("DUAL_PROCESSING_FILE_TYPES") else [],
         'max_workers': int(os.getenv("MAX_WORKERS", "4")),
+        'llm_max_workers': int(os.getenv("LLM_MAX_WORKERS", "1")),
         'retry_attempts': int(os.getenv("RETRY_ATTEMPTS", "3")),
         'timeout': int(os.getenv("TIMEOUT_SECONDS", "300")),
         'log_level': os.getenv("LOG_LEVEL", "INFO")

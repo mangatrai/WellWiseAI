@@ -55,44 +55,8 @@ class AstraVectorStoreSingle:
         
         # Initialize logging
         def setup_vector_logging():
-            """Setup logging for vector store operations."""
-            log_level = os.getenv('LOG_LEVEL', 'INFO')
-            
-            # Convert string log level to logging constant
-            level_map = {
-                'DEBUG': logging.DEBUG,
-                'INFO': logging.INFO,
-                'WARNING': logging.WARNING,
-                'ERROR': logging.ERROR
-            }
-            log_level_constant = level_map.get(log_level.upper(), logging.INFO)
-            
-            # Get logger for vector store operations
-            logger = logging.getLogger(self.__class__.__name__)
-            logger.setLevel(log_level_constant)
-            
-            # Only add handlers if they don't already exist (avoid duplicates)
-            if not logger.handlers:
-                # Console handler
-                console_handler = logging.StreamHandler()
-                console_handler.setLevel(log_level_constant)
-                
-                # File handler - use environment variable
-                log_file = os.getenv('LOG_FILE_NAME', 'wellwise_parser.log')
-                file_handler = logging.FileHandler(log_file)
-                file_handler.setLevel(logging.DEBUG)  # Always log everything to file
-                
-                # Formatter
-                formatter = logging.Formatter(
-                    '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-                )
-                console_handler.setFormatter(formatter)
-                file_handler.setFormatter(formatter)
-                
-                logger.addHandler(console_handler)
-                logger.addHandler(file_handler)
-            
-            return logger
+            """Get logger - handlers are set up by main pipeline."""
+            return logging.getLogger('wellwise')
         
         self.logger = setup_vector_logging()
         
@@ -509,7 +473,7 @@ class AstraQueryEngineSingle:
     
     def __init__(self, vector_store: AstraVectorStoreSingle):
         self.vector_store = vector_store
-        self.logger = logging.getLogger(self.__class__.__name__)
+        self.logger = logging.getLogger('wellwise')
     
     def query(self, question: str, limit: int = 5) -> List[VectorSearchResult]:
         """Query the vector store with hybrid search"""

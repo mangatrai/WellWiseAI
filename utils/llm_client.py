@@ -23,7 +23,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Configure logging
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('wellwise')
 
 class LLMClient:
     """
@@ -230,7 +230,6 @@ def create_llm_client() -> LLMClient:
 # Example usage and testing
 if __name__ == "__main__":
     # Configure logging for testing
-    logging.basicConfig(level=logging.INFO)
     
     print("🧪 Testing LLM Client")
     print("=" * 50)

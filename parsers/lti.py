@@ -13,7 +13,7 @@ import numpy as np
 
 from .base_parser import BaseParser
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('wellwise')
 
 class LtiParser(BaseParser):
     """LTI Parser with support for multiple vendor formats"""

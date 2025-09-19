@@ -90,7 +90,12 @@ class UnstructuredParser(BaseParser):
             data_sections = []
             element_types = {}
             
-            for i, chunk in enumerate(chunks):
+            # Get LLM max workers from config
+            import os
+            llm_max_workers = int(os.getenv("LLM_MAX_WORKERS", "1"))
+            
+            def process_chunk(chunk_data):
+                i, chunk = chunk_data
                 # Handle metadata properly - convert ElementMetadata to dict if needed
                 chunk_metadata = getattr(chunk, 'metadata', {})
                 if hasattr(chunk_metadata, '__dict__'):
@@ -126,7 +131,52 @@ class UnstructuredParser(BaseParser):
                 enhanced_metadata = self.enhance_chunk_metadata(str(chunk))
                 chunk_data['metadata'].update(enhanced_metadata)
                 
-                data_sections.append(chunk_data)
+                return chunk_data
+            
+            # Process chunks concurrently if LLM_MAX_WORKERS > 1
+            if llm_max_workers > 1:
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor(max_workers=llm_max_workers) as executor:
+                    future_to_chunk = {
+                        executor.submit(process_chunk, (i, chunk)): i 
+                        for i, chunk in enumerate(chunks)
+                    }
+                    
+                    completed_chunks = 0
+                    total_chunks = len(chunks)
+                    
+                    for future in concurrent.futures.as_completed(future_to_chunk):
+                        try:
+                            chunk_data = future.result()
+                            data_sections.append(chunk_data)
+                        except Exception as e:
+                            self.logger.error(f"Error processing chunk: {e}")
+                            # Add error chunk data
+                            chunk_id = future_to_chunk[future]
+                            data_sections.append({
+                                'chunk_id': chunk_id,
+                                'content': str(chunks[chunk_id]),
+                                'element_type': 'Error',
+                                'metadata': {'error': str(e)},
+                                'chunk_type': 'error'
+                            })
+                        
+                        completed_chunks += 1
+                        self.logger.info(f"Processing {self.file_path.name} - Chunks: {completed_chunks}/{total_chunks} completed ({llm_max_workers} concurrent)")
+                        
+                        # Log thread pool status every few completions
+                        if completed_chunks % 3 == 0 or completed_chunks == total_chunks:
+                            active_threads = len([t for t in executor._threads if t.is_alive()])
+                            # Note: _work_queue is a SimpleQueue that doesn't support len()
+                            self.logger.debug(f"ThreadPool status - Active: {active_threads}, Completed: {completed_chunks}")
+                
+                # Sort by chunk_id to maintain order
+                data_sections.sort(key=lambda x: x['chunk_id'])
+            else:
+                # Sequential processing (original behavior)
+                for i, chunk in enumerate(chunks):
+                    chunk_data = process_chunk((i, chunk))
+                    data_sections.append(chunk_data)
             
             # Create file structure analysis
             file_structure = {

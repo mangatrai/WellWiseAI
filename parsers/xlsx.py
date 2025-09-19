@@ -20,9 +20,8 @@ from utils.prompt_loader import get_prompt
 # Load environment variables
 load_dotenv()
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Get logger
+logger = logging.getLogger('wellwise')
 
 class XLSXParser:
     """Parser for XLSX facies interpretation files."""

@@ -37,7 +37,7 @@ class BaseParser(ABC):
         self.file_path = Path(file_path)
         
         # Use logger by name - handlers are set up by main pipeline
-        self.logger = logging.getLogger(self.__class__.__name__)
+        self.logger = logging.getLogger('wellwise')
         # Set logger level to match main pipeline
         import os
         log_level = os.getenv('LOG_LEVEL', 'INFO')
@@ -48,6 +48,8 @@ class BaseParser(ABC):
             'ERROR': logging.ERROR
         }
         self.logger.setLevel(level_map.get(log_level.upper(), logging.INFO))
+        # Ensure logger propagates to parent loggers (like wellwise_parser)
+        self.logger.propagate = True
         
     @abstractmethod
     def can_parse(self) -> bool:

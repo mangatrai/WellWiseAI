@@ -31,7 +31,7 @@ def setup_unified_logging():
     log_level_constant = level_map.get(log_level.upper(), logging.INFO)
     
     # Get logger for pipeline
-    logger = logging.getLogger(__name__)
+    logger = logging.getLogger('wellwise')
     logger.setLevel(log_level_constant)
     
     # Only add handlers if they don't already exist (avoid duplicates)

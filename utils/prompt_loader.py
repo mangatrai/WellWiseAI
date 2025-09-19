@@ -9,7 +9,7 @@ import yaml
 import os
 import logging
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('wellwise')
 
 def load_prompts():
     """Load prompts from YAML file."""

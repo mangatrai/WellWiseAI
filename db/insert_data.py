@@ -13,44 +13,8 @@ from astrapy.data_types import DataAPIDate, DataAPISet
 
 # Configure logging
 def setup_db_logging():
-    """Setup logging for database operations."""
-    log_level = os.getenv('LOG_LEVEL', 'INFO')
-    
-    # Convert string log level to logging constant
-    level_map = {
-        'DEBUG': logging.DEBUG,
-        'INFO': logging.INFO,
-        'WARNING': logging.WARNING,
-        'ERROR': logging.ERROR
-    }
-    log_level_constant = level_map.get(log_level.upper(), logging.INFO)
-    
-    # Get logger for database operations
-    logger = logging.getLogger(__name__)
-    logger.setLevel(log_level_constant)
-    
-    # Only add handlers if they don't already exist (avoid duplicates)
-    if not logger.handlers:
-        # Console handler
-        console_handler = logging.StreamHandler()
-        console_handler.setLevel(log_level_constant)
-        
-        # File handler - use environment variable
-        log_file = os.getenv('LOG_FILE_NAME', 'wellwise_parser.log')
-        file_handler = logging.FileHandler(log_file)
-        file_handler.setLevel(logging.DEBUG)  # Always log everything to file
-        
-        # Formatter
-        formatter = logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-        )
-        console_handler.setFormatter(formatter)
-        file_handler.setFormatter(formatter)
-        
-        logger.addHandler(console_handler)
-        logger.addHandler(file_handler)
-    
-    return logger
+    """Get logger - handlers are set up by main pipeline."""
+    return logging.getLogger('wellwise')
 
 logger = setup_db_logging()
 parsed_data_dir: str = os.getenv("PARSED_DIRECTORY", "structured_data")

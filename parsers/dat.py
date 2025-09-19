@@ -20,7 +20,7 @@ class DatParser(BaseParser):
     
     def __init__(self, file_path: str):
         super().__init__(file_path)
-        self.logger = logging.getLogger(__name__)
+        self.logger = logging.getLogger('wellwise')
         self.supported_extensions = ['.dat']
         self.record_count = 0  # Counter for LLM enhancement limit
         
@@ -364,7 +364,6 @@ def main():
     file_path = sys.argv[1]
     
     # Setup logging
-    logging.basicConfig(level=logging.INFO)
     
     # Create parser and parse file
     parser = DatParser(file_path)

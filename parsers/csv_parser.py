@@ -13,9 +13,8 @@ from datetime import datetime
 import numpy as np
 from schema.fields import CANONICAL_FIELDS
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Get logger
+logger = logging.getLogger('wellwise')
 
 # CSV to canonical field mappings (39 fields) - using list to handle duplicate CSV column names
 # Each tuple is (csv_column_name, canonical_field_name, priority)
