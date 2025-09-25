@@ -275,8 +275,8 @@ class DatParser(BaseParser):
             # Remove None values
             record = {k: v for k, v in record.items() if v is not None}
             
-            # Enhance with LLM if available (limit to first 5 records for testing)
-            if self.llm_available and self.record_count < 5:
+            # Enhance with LLM if available
+            if self.llm_available:
                 record = self.enhance_record_with_llm(record)
                 self.record_count += 1
             
